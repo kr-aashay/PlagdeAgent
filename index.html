@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>AI Ethics Coach — Vignan Pledge</title>
+  <link rel="stylesheet" href="/oath/style.css" />
+</head>
+<body>
+
+  <!-- ── AI ambient background ──────────────────────────────── -->
+  <div class="bg-particles" id="bgParticles"></div>
+  <div class="ai-grid"></div>
+
+  <!-- ── Outer centering shell ──────────────────────────────── -->
+  <div class="phone-shell">
+
+    <!-- ════════════════════════════════════════════════════════
+         PHONE FRAME
+    ════════════════════════════════════════════════════════ -->
+    <div class="phone-frame">
+
+      <!-- WA-style header -->
+      <header class="wa-header">
+        <div class="wa-back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </div>
+        <div class="wa-avatar-wrap">
+          <div class="wa-avatar">🤖</div>
+          <span class="wa-online-dot"></span>
+        </div>
+        <div class="wa-header-info">
+          <span class="wa-name">AI Ethics Coach</span>
+          <span class="wa-status" id="statusText">online</span>
+        </div>
+        <div class="wa-header-actions">
+          <!-- progress pill lives here during quiz -->
+          <div class="progress-pill" id="progressPill" style="display:none;">
+            <span id="progressPillText">0 / 5</span>
+            <div class="progress-pill-track">
+              <div class="progress-pill-fill" id="progressPillFill"></div>
+            </div>
+          </div>
+          <span class="wa-icon-btn" id="statusDot"></span>
+        </div>
+      </header>
+
+      <!-- Chat messages -->
+      <div class="chat-messages" id="chatMessages"></div>
+
+      <!-- ── Bottom bars (only one visible at a time) ───────── -->
+
+      <!-- 1. Registration form (shown first — replaces old name-only bar) -->
+      <div class="reg-bar" id="regBar" data-alias="nameEntryBar">
+        <div class="reg-form" id="regForm">
+
+          <!-- Type toggle -->
+          <div class="reg-type-row">
+            <button class="reg-type-btn active" id="typeBtnStudent" data-type="student">
+              🎓 Student
+            </button>
+            <button class="reg-type-btn" id="typeBtnEmployee" data-type="employee">
+              💼 Employee
+            </button>
+          </div>
+
+          <!-- Name row -->
+          <div class="reg-field-row">
+            <span class="reg-field-icon">👤</span>
+            <input
+              type="text"
+              id="nameInput"
+              class="wa-text-input reg-input"
+              placeholder="Full name…"
+              maxlength="60"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+
+          <!-- ID row (label changes with type) -->
+          <div class="reg-field-row">
+            <span class="reg-field-icon" id="regIdIcon">🎓</span>
+            <input
+              type="text"
+              id="regIdInput"
+              class="wa-text-input reg-input"
+              placeholder="Registration number…"
+              maxlength="30"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+
+          <!-- Error message -->
+          <div class="reg-error" id="regError" style="display:none;"></div>
+
+          <!-- Submit -->
+          <button class="reg-submit-btn" id="startBtn">
+            Begin Assessment →
+          </button>
+
+        </div>
+      </div>
+
+      <!-- 2. MCQ options -->
+      <div class="mcq-options" id="mcqOptions" style="display:none;">
+        <div class="options-grid" id="optionsGrid"></div>
+      </div>
+
+      <!-- 3. Pledge bar (hidden — pledge lives in modal popup) -->
+      <div id="pledgeBar" style="display:none;">
+        <div id="pledgeScrollDummy"></div>
+        <div class="pledge-action" style="display:none;">
+          <div class="pledge-scroll-hint" id="pledgeScrollHintDummy"></div>
+          <button class="btn-agree" id="agreeBtnDummy" disabled></button>
+        </div>
+      </div>
+
+      <!-- 4. Free-form chat after completion -->
+      <div class="wa-input-bar" id="chatInputBar" style="display:none;">
+        <div class="wa-composer">
+          <input
+            type="text"
+            id="chatInput"
+            class="wa-text-input"
+            placeholder="Ask about AI ethics…"
+            autocomplete="off"
+          />
+          <button class="wa-send-btn btn-send" id="sendBtn" aria-label="Send">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /phone-frame -->
+
+    <!-- ══════════════════════════════════════════════════════
+         PLEDGE MODAL POPUP
+    ══════════════════════════════════════════════════════ -->
+    <div class="pledge-modal-overlay" id="pledgeModalOverlay" style="display:none;">
+      <div class="pledge-modal-box">
+
+        <div class="pledge-modal-header">
+          <span class="pledge-modal-icon">⚖️</span>
+          <div>
+            <h3 class="pledge-modal-title">Vignan AI Responsibility Oath</h3>
+            <p class="pledge-modal-sub">Read the full oath, then sign below</p>
+          </div>
+          <!-- no close button — must agree to proceed -->
+        </div>
+
+        <div class="pledge-modal-body" id="pledgeScroll">
+          <p>I pledge to use Artificial Intelligence <strong>responsibly, ethically, and for the benefit of society</strong>.</p>
+          <p>I will use AI to learn, innovate, and solve real-world problems, while always thinking critically and acting with integrity.</p>
+          <p>I will <strong>never</strong> use AI to cheat, plagiarise, spread misinformation, create deepfakes, or cause harm.</p>
+          <p>I will verify AI-generated information, respect privacy, protect intellectual property, and promote <strong>fairness, transparency, and accountability</strong>.</p>
+          <p>I accept <strong>responsibility</strong> for how I use AI and for the impact of my actions.</p>
+          <p>As a proud Vignanian, I commit to using AI to <strong>create knowledge, inspire innovation, and build a better future for humanity</strong>.</p>
+          <p class="pledge-closing">Together, we pledge to make AI a force for good.</p>
+        </div>
+
+        <div class="pledge-modal-footer">
+          <div class="pledge-scroll-hint" id="pledgeScrollHint">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            Scroll to read the full oath
+          </div>
+          <button class="btn-agree" id="agreeBtn" disabled>
+            <span class="agree-icon">✍️</span>
+            I Agree &amp; Claim My Certificate
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         CERTIFICATE MODAL POPUP
+    ══════════════════════════════════════════════════════ -->
+    <div class="cert-modal-overlay" id="certModalOverlay" style="display:none;">
+      <div class="cert-modal-box">
+
+        <div class="cert-modal-header">
+          <span class="cert-modal-icon">🏅</span>
+          <h3 class="cert-modal-title">Your Ethics Certificate</h3>
+        </div>
+
+        <canvas id="badgeCanvas" width="420" height="420"></canvas>
+
+        <div class="cert-modal-footer">
+          <div class="badge-summary" id="badgeSummary"></div>
+          <div class="badge-actions">
+            <button class="btn-download" id="downloadBtn">⬇ Download Certificate</button>
+            <button class="btn-restart"  id="restartBtn">↺ Start Over</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /phone-shell -->
+
+  <!-- hidden DOM anchors so app.js DOM refs don't break -->
+  <div style="display:none;">
+    <div id="badgePlaceholder"></div>
+    <div id="badgeResult"></div>
+    <div id="badgePanel"></div>
+  </div>
+
+  <script src="/oath/app.js"></script>
+</body>
+</html>
