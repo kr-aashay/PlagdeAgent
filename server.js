@@ -156,6 +156,7 @@ app.use(API_PATH, api);
 // nginx already serves /oath static in production;
 // this block makes `npm start` work locally too.
 const STATIC_DIR = path.join(__dirname);
+app.use("/oath", express.static(STATIC_DIR));
 app.use(express.static(STATIC_DIR));
 app.get("/{*path}", (req, res) => {
   res.sendFile(path.join(STATIC_DIR, "index.html"));

@@ -1,7 +1,7 @@
 {
   "name": "ai-pledge",
   "version": "1.0.0",
-  "description": "Vignan AI Ethics Pledge — interactive assessment + certificate",
+  "description": "Vignan AI Ethics Pledge — interactive assessment + Badge",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

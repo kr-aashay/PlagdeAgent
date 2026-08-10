@@ -212,7 +212,7 @@ const followUpTopics = [
   },
   {
     keywords: ["certif", "badge", "pledge", "download"],
-    response: (name) => `Your certificate is displayed on the right panel, ${name}. Click "Download Certificate" to save it as a PNG. It records your commitment to the five principles you just demonstrated.`
+    response: (name) => `Your badge is displayed in the popup, ${name}. Click "Download Badge" to save it as a PNG. It records your commitment to the five principles you just demonstrated.`
   },
   {
     keywords: ["learn", "study", "student", "education", "school", "academic"],
@@ -405,7 +405,7 @@ function showWelcome() {
   addMsg("agent",
     `Welcome to the <strong>Vignan AI Ethics Pledge Assessment</strong>! ⚖️<br><br>
      I am your AI Ethics Coach. Complete <strong>5 questions</strong> on responsible
-     AI use to earn your personalised <strong>Ethics Certificate</strong>.<br><br>
+     AI use to earn your personalised <strong>Ethics Badge</strong>.<br><br>
      Please fill in your details below to begin.`
   );
 }
@@ -662,11 +662,11 @@ function finalizeAssessment() {
      <strong>Designation:</strong> ${esc(emoji)} ${esc(archetype)}<br>
      <strong>Tagline:</strong> <em>${esc(tagline)}</em><br><br>
      One final step — read the <strong>Vignan AI Responsibility Oath</strong> below and
-     click <em>"I Agree &amp; Claim My Certificate"</em> to generate and unlock your
-     personalised certificate. 👇`
+     click <em>"I Agree &amp; Claim My Badge"</em> to generate and unlock your
+     personalised badge. 👇`
   );
 
-  // Show the pledge bar — certificate is gated behind agreement
+  // Show the pledge bar — badge is gated behind agreement
   showPledgeBar();
 }
 
@@ -708,7 +708,7 @@ function showPledgeBar() {
   });
 }
 
-// ─── Agreement confirmed — close pledge modal, render certificate ─────────────
+// ─── Agreement confirmed — close pledge modal, render badge ─────────────
 function agreeAndReveal() {
   const pledgeOverlay = document.getElementById("pledgeModalOverlay");
   if (pledgeOverlay) pledgeOverlay.style.display = "none";
@@ -738,18 +738,18 @@ function agreeAndReveal() {
 
     addMsg("agent",
       `🏅 <strong>Your commitment is recorded, ${esc(state.userName)}!</strong><br><br>
-       Your personalised Ethics Certificate has been generated.
+       Your personalised Ethics Badge has been generated.
        Download it as a reminder of your pledge to responsible AI.<br><br>
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
 
-    renderCertificate(state.result, () => {
+    renderBadge(state.result, () => {
       const certOverlay = document.getElementById("certModalOverlay");
       if (certOverlay) certOverlay.style.display = "flex";
     });
 
     $downloadBtn.classList.remove("locked");
-    $downloadBtn.textContent = "⬇ Download Certificate";
+    $downloadBtn.textContent = "⬇ Download Badge";
     $chatInputBar.style.display = "flex";
   }, 1000);
 }
@@ -780,14 +780,14 @@ function sendFreeChat() {
   }, 700);
 }
 
-// ─── Preload certificate template image at boot (eliminates modal delay) ──────
-const _certImg = new Image();
-_certImg.src   = "/oath/assets/certificate-template.png";
-// onload/onerror handled silently — renderCertificate checks naturalWidth
+// ─── Preload badge template image at boot (eliminates modal delay) ──────
+const _badgeImg = new Image();
+_badgeImg.src   = "/oath/assets/badge-template.png";
+// onload/onerror handled silently — renderBadge checks naturalWidth
 
-// ─── HTML5 Canvas Certificate Renderer ───────────────────────────────────────
+// ─── HTML5 Canvas Badge Renderer ───────────────────────────────────────
 // onComplete callback is called once the canvas is fully drawn.
-function renderCertificate(result, onComplete) {
+function renderBadge(result, onComplete) {
   const canvas = $badgeCanvas;
   const ctx    = canvas.getContext("2d");
 
@@ -812,30 +812,38 @@ function renderCertificate(result, onComplete) {
       return lines;
     }
 
-    const maxW    = canvas.width * 0.62;
-    let   fSize   = Math.round(canvas.width * 0.054);
+    const maxW    = canvas.width * 0.50;
+    let   fSize   = Math.round(canvas.width * 0.052);
     let   lines   = [result.name];
 
-    while (fSize > 28) {
-      const font    = `bold ${fSize}px 'Segoe UI', Arial, sans-serif`;
+    while (fSize > 20) {
+      const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+      ctx.font = font;
       const attempt = getLines(result.name, maxW, font);
-      if (attempt.length <= 2) { lines = attempt; break; }
+      const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
+
+      if (attempt.length <= 2 && allFit) {
+        lines = attempt;
+        break;
+      }
       fSize -= 2;
     }
 
-    ctx.font      = `bold ${fSize}px 'Segoe UI', Arial, sans-serif`;
+    // Cap font size for 2 lines to keep it elegant and within the blue area vertically
+    if (lines.length > 1 && fSize > Math.round(canvas.width * 0.038)) {
+      fSize = Math.round(canvas.width * 0.038);
+    }
+
+    ctx.font      = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-    const centreY    = canvas.height * 0.58;
-    const lineHeight = fSize * 1.28;
+    const centreY    = canvas.height * 0.47;
+    const lineHeight = fSize * 1.25;
 
-    if (lines.length === 1) {
-      ctx.fillText(lines[0], canvas.width / 2, centreY);
-    } else {
-      const startY = centreY - lineHeight / 2 + fSize * 0.36;
-      lines.forEach((ln, i) => ctx.fillText(ln, canvas.width / 2, startY + i * lineHeight));
-    }
+    const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((ln, i) => ctx.fillText(ln, canvas.width / 2, startY + i * lineHeight));
 
     ctx.restore();
 
@@ -902,24 +910,24 @@ function renderCertificate(result, onComplete) {
   }
 
   // Use preloaded image if ready, otherwise wait / fallback
-  if (_certImg.complete && _certImg.naturalWidth > 0) {
+  if (_badgeImg.complete && _badgeImg.naturalWidth > 0) {
     // Already cached — draw instantly, no network wait
-    drawFromImage(_certImg);
-  } else if (_certImg.complete && _certImg.naturalWidth === 0) {
+    drawFromImage(_badgeImg);
+  } else if (_badgeImg.complete && _badgeImg.naturalWidth === 0) {
     // Failed to load template
     drawFallback();
   } else {
     // Still loading — attach handlers
-    _certImg.onload  = () => drawFromImage(_certImg);
-    _certImg.onerror = () => drawFallback();
+    _badgeImg.onload  = () => drawFromImage(_badgeImg);
+    _badgeImg.onerror = () => drawFallback();
   }
 }
 
-// ─── Download certificate ─────────────────────────────────────────────────────
-function downloadCertificate() {
+// ─── Download badge ─────────────────────────────────────────────────────
+function downloadBadge() {
   const a      = document.createElement("a");
   const safeName = state.userName.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-");
-  a.download   = `AI-Ethics-Certificate-${safeName}.png`;
+  a.download   = `AI-Ethics-Badge-${safeName}.png`;
   a.href       = $badgeCanvas.toDataURL("image/png");
   a.click();
 }
@@ -963,7 +971,7 @@ function restart() {
   if (agreeEl) agreeEl.disabled = true;
   if (hintEl)  hintEl.classList.remove("hidden");
   $downloadBtn.classList.add("locked");
-  $downloadBtn.textContent = "Download Certificate";
+  $downloadBtn.textContent = "Download Badge";
 
   setStatus("Ready");
   showWelcome();
@@ -985,7 +993,7 @@ $agreeBtn.addEventListener("click",   agreeAndReveal);
 $sendBtn.addEventListener("click",   sendFreeChat);
 $chatInput.addEventListener("keydown", e => { if (e.key === "Enter") sendFreeChat(); });
 
-$downloadBtn.addEventListener("click", downloadCertificate);
+$downloadBtn.addEventListener("click", downloadBadge);
 $restartBtn.addEventListener("click",  restart);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
