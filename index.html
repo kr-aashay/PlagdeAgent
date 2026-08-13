@@ -1,16 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI Ethics Coach — Vignan Pledge</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/oath/style.css" />
 </head>
+
 <body>
 
   <!-- ── AI ambient background ──────────────────────────────── -->
@@ -28,9 +32,9 @@
       <!-- WA-style header -->
       <header class="wa-header">
         <div class="wa-back">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <polyline points="15 18 9 12 15 6"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <polyline points="15 18 9 12 15 6" />
           </svg>
         </div>
         <div class="wa-avatar-wrap">
@@ -75,29 +79,15 @@
           <!-- Name row -->
           <div class="reg-field-row">
             <span class="reg-field-icon">👤</span>
-            <input
-              type="text"
-              id="nameInput"
-              class="wa-text-input reg-input"
-              placeholder="Full name…"
-              maxlength="60"
-              autocomplete="off"
-              spellcheck="false"
-            />
+            <input type="text" id="nameInput" class="wa-text-input reg-input" placeholder="Full name…" maxlength="60"
+              autocomplete="off" spellcheck="false" />
           </div>
 
           <!-- ID row (label changes with type) -->
           <div class="reg-field-row">
             <span class="reg-field-icon" id="regIdIcon">🎓</span>
-            <input
-              type="text"
-              id="regIdInput"
-              class="wa-text-input reg-input"
-              placeholder="Registration number…"
-              maxlength="30"
-              autocomplete="off"
-              spellcheck="false"
-            />
+            <input type="text" id="regIdInput" class="wa-text-input reg-input" placeholder="Registration number…"
+              maxlength="30" autocomplete="off" spellcheck="false" />
           </div>
 
           <!-- Error message -->
@@ -128,16 +118,11 @@
       <!-- 4. Free-form chat after completion -->
       <div class="wa-input-bar" id="chatInputBar" style="display:none;">
         <div class="wa-composer">
-          <input
-            type="text"
-            id="chatInput"
-            class="wa-text-input"
-            placeholder="Ask about AI ethics…"
-            autocomplete="off"
-          />
+          <input type="text" id="chatInput" class="wa-text-input" placeholder="Ask about AI ethics…"
+            autocomplete="off" />
           <button class="wa-send-btn btn-send" id="sendBtn" aria-label="Send">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
         </div>
@@ -161,19 +146,27 @@
         </div>
 
         <div class="pledge-modal-body" id="pledgeScroll">
-          <p>I pledge to use Artificial Intelligence <strong>responsibly, ethically, and for the benefit of society</strong>.</p>
-          <p>I will use AI to learn, innovate, and solve real-world problems, while always thinking critically and acting with integrity.</p>
-          <p>I will <strong>never</strong> use AI to cheat, plagiarise, spread misinformation, create deepfakes, or cause harm.</p>
-          <p>I will verify AI-generated information, respect privacy, protect intellectual property, and promote <strong>fairness, transparency, and accountability</strong>.</p>
-          <p>I accept <strong>responsibility</strong> for how I use AI and for the impact of my actions.</p>
-          <p>As a proud Vignanian, I commit to using AI to <strong>create knowledge, inspire innovation, and build a better future for humanity</strong>.</p>
-          <p class="pledge-closing">Together, we pledge to make AI a force for good.</p>
+          <p>I pledge to use Artificial Intelligence <strong>responsibly, ethically, and for the advancement of
+              society</strong>.</p>
+          <p>I will harness AI to <strong>learn, innovate, create knowledge, and address real-world challenges</strong>,
+            while exercising critical thinking, sound judgment, and unwavering integrity.</p>
+          <p>I will <strong>never</strong> misuse AI for cheating, plagiarism, misinformation, malicious manipulation,
+            deceptive deepfakes, or any activity that may cause harm to individuals, communities, or society.</p>
+          <p>I will verify and critically evaluate AI-generated information, respect privacy and intellectual property,
+            and uphold the principles of <strong>fairness, transparency, accountability, and human dignity</strong>.</p>
+          <p>I acknowledge that I am <strong>responsible</strong> for the decisions I make and the consequences of how I
+            use AI.</p>
+          <p>As a proud Vignanian, I commit to using AI as a <strong>force for knowledge, innovation, inclusion, and
+              positive societal impact</strong>, contributing to a smarter, safer, and more sustainable future.</p>
+          <p class="pledge-closing">Together, we pledge to make AI a force for good—guided by ethics, driven by
+            innovation, and centered on humanity. 🌍🤖</p>
         </div>
 
         <div class="pledge-modal-footer">
           <div class="pledge-scroll-hint" id="pledgeScrollHint">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
             Scroll to read the full oath
           </div>
           <button class="btn-agree" id="agreeBtn" disabled>
@@ -202,7 +195,7 @@
           <div class="badge-summary" id="badgeSummary"></div>
           <div class="badge-actions">
             <button class="btn-download" id="downloadBtn">⬇ Download Badge</button>
-            <button class="btn-restart"  id="restartBtn">↺ Start Over</button>
+            <button class="btn-restart" id="restartBtn">↺ Start Over</button>
           </div>
         </div>
 
@@ -220,4 +213,5 @@
 
   <script src="/oath/app.js"></script>
 </body>
+
 </html>

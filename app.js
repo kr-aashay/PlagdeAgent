@@ -403,10 +403,10 @@ function addProgressBar(completed) {
 // ─── Welcome message ──────────────────────────────────────────────────────────
 function showWelcome() {
   addMsg("agent",
-    `Welcome to the <strong>Vignan AI Ethics Pledge Assessment</strong>! ⚖️<br><br>
-     I am your AI Ethics Coach. Complete <strong>5 questions</strong> on responsible
-     AI use to earn your personalised <strong>Ethics Badge</strong>.<br><br>
-     Please fill in your details below to begin.`
+    `Welcome to the <strong>Vignan AI Ethics Pledge</strong>. ⚖️<br><br>
+     You are about to take a short <strong>5-question assessment</strong> designed to evaluate your understanding of responsible, ethical, and human-centered Artificial Intelligence practices.<br><br>
+     Complete all five questions to demonstrate your commitment to Responsible AI and earn your personalized <em>AI Ethics Badge</em>.<br><br>
+     Please enter your details below to begin the assessment.`
   );
 }
 
@@ -500,11 +500,11 @@ async function startQuiz() {
     hideTyping();
     setStatus("Ready");
     addMsg("agent",
-      `Great to have you here, <strong>${esc(name)}</strong>! 👋<br><br>
-       I'll coach you through <strong>${mcqQuestions.length} key AI ethics questions</strong>.
-       Choose the most responsible option for each one — I'll give you personalised feedback,
-       and if you pick an incorrect option I'll explain why and ask you to try again.<br><br>
-       Let's begin:`
+      `Welcome, <strong>${esc(name)}</strong>! 👋<br><br>
+       I’m delighted to have you here.<br><br>
+       I’ll guide you through <strong>${mcqQuestions.length} essential questions</strong> on AI ethics and responsible AI use.<br><br>
+       For each question, select the option that best reflects ethical, responsible, and human-centered AI practices. You’ll receive personalized feedback after every response. If your answer is not the most appropriate choice, I’ll explain the reasoning and give you another opportunity to make the right decision.<br><br>
+       Let’s begin your AI Ethics journey! ⚖️🤖`
     );
     setTimeout(() => presentQuestion(), 500);
   }, 900);
@@ -688,7 +688,7 @@ function showPledgeBar() {
   scrollEl.scrollTop = 0;
 
   function checkScroll() {
-    const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 8;
+    const atBottom = Math.ceil(scrollEl.scrollTop) + scrollEl.clientHeight >= scrollEl.scrollHeight - 15;
     if (atBottom) {
       agreeEl.disabled = false;
       agreeEl.style.background = "linear-gradient(135deg, #6366f1, #818cf8)";
@@ -699,13 +699,10 @@ function showPledgeBar() {
 
   scrollEl.addEventListener("scroll", checkScroll);
 
-  // If content fits without scrolling — unlock immediately
-  requestAnimationFrame(() => {
-    if (scrollEl.scrollHeight <= scrollEl.clientHeight + 8) {
-      agreeEl.disabled = false;
-      if (hintEl) hintEl.classList.add("hidden");
-    }
-  });
+  // Check layout after modal is fully rendered to handle cases where no scrolling is needed
+  setTimeout(() => {
+    checkScroll();
+  }, 150);
 }
 
 // ─── Agreement confirmed — close pledge modal, render badge ─────────────
@@ -801,7 +798,7 @@ function renderBadge(result, onComplete) {
       let   line  = words[0] || "";
       for (let i = 1; i < words.length; i++) {
         const test = line + " " + words[i];
-        if (ctx.measureText(test).width < maxW) {
+        if (ctx.measureText(test).width <= maxW) {
           line = test;
         } else {
           lines.push(line);
@@ -812,26 +809,46 @@ function renderBadge(result, onComplete) {
       return lines;
     }
 
-    const maxW    = canvas.width * 0.50;
-    let   fSize   = Math.round(canvas.width * 0.052);
-    let   lines   = [result.name];
+    const maxW = canvas.width * 0.65;
+    const maxFSize = Math.round(canvas.width * (35 / 420)); // Equivalent to 35px on a 420px canvas
+    let fSize = maxFSize;
+    let lines = [result.name];
 
-    while (fSize > 20) {
-      const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
-      ctx.font = font;
-      const attempt = getLines(result.name, maxW, font);
-      const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
-
-      if (attempt.length <= 2 && allFit) {
-        lines = attempt;
+    // Try single line layout first
+    let singleFit = false;
+    let singleFSize = maxFSize;
+    while (singleFSize > 20) {
+      ctx.font = `bold ${singleFSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+      if (ctx.measureText(result.name).width <= maxW) {
+        singleFit = true;
         break;
       }
-      fSize -= 2;
+      singleFSize -= 2;
     }
 
-    // Cap font size for 2 lines to keep it elegant and within the blue area vertically
-    if (lines.length > 1 && fSize > Math.round(canvas.width * 0.038)) {
-      fSize = Math.round(canvas.width * 0.038);
+    const minSingleThreshold = Math.round(canvas.width * (20 / 420)); // Equivalent to 20px on a 420px canvas
+    if (singleFit && singleFSize >= minSingleThreshold) {
+      fSize = singleFSize;
+      lines = [result.name];
+    } else {
+      // Too long for a single line at high resolution. Wrap to 2 lines.
+      fSize = Math.round(canvas.width * 0.08);
+      while (fSize > 20) {
+        const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+        const attempt = getLines(result.name, maxW, font);
+        const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
+
+        if (attempt.length <= 2 && allFit) {
+          lines = attempt;
+          break;
+        }
+        fSize -= 2;
+      }
+
+      // Cap font size for 2 lines to keep it elegant and within the blue area vertically
+      if (lines.length > 1 && fSize > Math.round(canvas.width * 0.045)) {
+        fSize = Math.round(canvas.width * 0.045);
+      }
     }
 
     ctx.font      = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
@@ -839,7 +856,7 @@ function renderBadge(result, onComplete) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    const centreY    = canvas.height * 0.47;
+    const centreY    = canvas.height * 0.48;
     const lineHeight = fSize * 1.25;
 
     const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
