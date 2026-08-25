@@ -515,6 +515,17 @@ app.use(API_PATH, api);
 // nginx already serves /oath static in production;
 // this block makes `npm start` work locally too.
 const STATIC_DIR = path.join(__dirname);
+
+// Disable caching for development
+app.use((req, res, next) => {
+  if (req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 app.use("/oath", express.static(STATIC_DIR));
 app.use(express.static(STATIC_DIR));
 
