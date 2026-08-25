@@ -480,9 +480,6 @@ app.use(API_PATH, api);
 const STATIC_DIR = path.join(__dirname);
 app.use("/oath", express.static(STATIC_DIR));
 app.use(express.static(STATIC_DIR));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(STATIC_DIR, "index.html"));
-});
 
 /* ─── Graceful Shutdown ─────────────────────────────────────────────────────── */
 process.on("SIGTERM", async () => {
