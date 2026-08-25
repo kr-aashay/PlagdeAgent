@@ -785,93 +785,140 @@ function sendFreeChat() {
   }, 700);
 }
 
-// ─── Preload badge template image at boot (eliminates modal delay) ──────
+// ─── Preload badge and certificate template images at boot ──────────────────
 const _badgeImg = new Image();
 _badgeImg.src   = "/oath/assets/badge-template.png";
-// onload/onerror handled silently — renderBadge checks naturalWidth
 
-// ─── HTML5 Canvas Badge Renderer ───────────────────────────────────────
-// onComplete callback is called once the canvas is fully drawn.
+const _certImg = new Image();
+_certImg.src   = "/oath/assets/certificate-template.png";
+// onload/onerror handled silently — render functions check naturalWidth
+
+// ─── Helper: Draw Name on Badge (Complex Layout) ──────────────────────────────
+function drawNameOnBadge(canvas, ctx, result) {
+  ctx.save();
+
+  function getLines(text, maxW, font) {
+    ctx.font = font;
+    const words = text.split(/\s+/);
+    const lines = [];
+    let   line  = words[0] || "";
+    for (let i = 1; i < words.length; i++) {
+      const test = line + " " + words[i];
+      if (ctx.measureText(test).width <= maxW) {
+        line = test;
+      } else {
+        lines.push(line);
+        line = words[i];
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  const maxW = canvas.width * 0.65;
+  const maxFSize = Math.round(canvas.width * (35 / 420));
+  let fSize = maxFSize;
+  let lines = [result.name];
+
+  // Try single line layout first
+  let singleFit = false;
+  let singleFSize = maxFSize;
+  while (singleFSize > 20) {
+    ctx.font = `bold ${singleFSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+    if (ctx.measureText(result.name).width <= maxW) {
+      singleFit = true;
+      break;
+    }
+    singleFSize -= 2;
+  }
+
+  const minSingleThreshold = Math.round(canvas.width * (20 / 420));
+  if (singleFit && singleFSize >= minSingleThreshold) {
+    fSize = singleFSize;
+    lines = [result.name];
+  } else {
+    fSize = Math.round(canvas.width * 0.08);
+    while (fSize > 20) {
+      const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+      const attempt = getLines(result.name, maxW, font);
+      const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
+
+      if (attempt.length <= 2 && allFit) {
+        lines = attempt;
+        break;
+      }
+      fSize -= 2;
+    }
+
+    if (lines.length > 1 && fSize > Math.round(canvas.width * 0.045)) {
+      fSize = Math.round(canvas.width * 0.045);
+    }
+  }
+
+  ctx.font      = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const centreY    = canvas.height * 0.48;
+  const lineHeight = fSize * 1.25;
+
+  const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((ln, i) => ctx.fillText(ln, canvas.width / 2, startY + i * lineHeight));
+
+  ctx.restore();
+}
+
+// ─── Helper: Draw Badge Fallback ──────────────────────────────────────────────
+function drawBadgeFallback(canvas, ctx, result) {
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  grad.addColorStop(0,   "#0f0c29");
+  grad.addColorStop(0.5, "#1a1560");
+  grad.addColorStop(1,   "#312e81");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  for (let x = 30; x < canvas.width; x += 38) {
+    for (let y = 30; y < canvas.height; y += 38) {
+      ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font      = "bold 38px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText("AI Ethics Pledge", canvas.width / 2, 140);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fillRect(canvas.width * 0.1, 170, canvas.width * 0.8, 2);
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "22px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText("This certifies that", canvas.width / 2, 230);
+  ctx.fillStyle = "#ffffff";
+  let nSize = 64;
+  ctx.font = `bold ${nSize}px 'Segoe UI', Arial, sans-serif`;
+  while (nSize > 28 && ctx.measureText(result.name).width > canvas.width * 0.78) {
+    nSize -= 2; ctx.font = `bold ${nSize}px 'Segoe UI', Arial, sans-serif`;
+  }
+  ctx.fillText(result.name, canvas.width / 2, 320);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fillRect(canvas.width * 0.2, 350, canvas.width * 0.6, 1);
+  ctx.fillStyle = "#94a3b8"; ctx.font = "20px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText("has completed the AI Ethics Pledge Assessment", canvas.width / 2, 400);
+  ctx.fillStyle = "#818cf8"; ctx.font = "bold 26px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText(`${result.emoji}  ${result.archetype}`, canvas.width / 2, 470);
+  ctx.fillStyle = "#64748b"; ctx.font = "italic 18px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText(`"${result.tagline}"`, canvas.width / 2, 510);
+  ctx.fillStyle = "#475569"; ctx.font = "16px 'Segoe UI', Arial, sans-serif";
+  ctx.fillText(new Date().toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }),
+    canvas.width / 2, canvas.height - 60);
+}
+
+// ─── Initial Badge Render (for preview) ───────────────────────────────────────
 function renderBadge(result, onComplete) {
   const canvas = $badgeCanvas;
   const ctx    = canvas.getContext("2d");
 
-  function drawNameOnCanvas() {
-    ctx.save();
-
-    function getLines(text, maxW, font) {
-      ctx.font = font;
-      const words = text.split(/\s+/);
-      const lines = [];
-      let   line  = words[0] || "";
-      for (let i = 1; i < words.length; i++) {
-        const test = line + " " + words[i];
-        if (ctx.measureText(test).width <= maxW) {
-          line = test;
-        } else {
-          lines.push(line);
-          line = words[i];
-        }
-      }
-      if (line) lines.push(line);
-      return lines;
-    }
-
-    const maxW = canvas.width * 0.65;
-    const maxFSize = Math.round(canvas.width * (35 / 420)); // Equivalent to 35px on a 420px canvas
-    let fSize = maxFSize;
-    let lines = [result.name];
-
-    // Try single line layout first
-    let singleFit = false;
-    let singleFSize = maxFSize;
-    while (singleFSize > 20) {
-      ctx.font = `bold ${singleFSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
-      if (ctx.measureText(result.name).width <= maxW) {
-        singleFit = true;
-        break;
-      }
-      singleFSize -= 2;
-    }
-
-    const minSingleThreshold = Math.round(canvas.width * (20 / 420)); // Equivalent to 20px on a 420px canvas
-    if (singleFit && singleFSize >= minSingleThreshold) {
-      fSize = singleFSize;
-      lines = [result.name];
-    } else {
-      // Too long for a single line at high resolution. Wrap to 2 lines.
-      fSize = Math.round(canvas.width * 0.08);
-      while (fSize > 20) {
-        const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
-        const attempt = getLines(result.name, maxW, font);
-        const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
-
-        if (attempt.length <= 2 && allFit) {
-          lines = attempt;
-          break;
-        }
-        fSize -= 2;
-      }
-
-      // Cap font size for 2 lines to keep it elegant and within the blue area vertically
-      if (lines.length > 1 && fSize > Math.round(canvas.width * 0.045)) {
-        fSize = Math.round(canvas.width * 0.045);
-      }
-    }
-
-    ctx.font      = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    const centreY    = canvas.height * 0.48;
-    const lineHeight = fSize * 1.25;
-
-    const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
-    lines.forEach((ln, i) => ctx.fillText(ln, canvas.width / 2, startY + i * lineHeight));
-
-    ctx.restore();
-
+  function drawComplete() {
     $badgeSummary.innerHTML =
       `<strong>${esc(result.emoji)} ${esc(result.name)}</strong> — 
        <strong>${esc(result.archetype)}</strong><br>
@@ -880,71 +927,31 @@ function renderBadge(result, onComplete) {
     if (typeof onComplete === "function") onComplete();
   }
 
-  function drawFromImage(img) {
-    canvas.width  = img.naturalWidth  || 3375;
-    canvas.height = img.naturalHeight || 3375;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    drawNameOnCanvas();
-  }
-
-  function drawFallback() {
+  if (_badgeImg.complete && _badgeImg.naturalWidth > 0) {
+    canvas.width  = _badgeImg.naturalWidth  || 3375;
+    canvas.height = _badgeImg.naturalHeight || 3375;
+    ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
+    drawNameOnBadge(canvas, ctx, result);
+    drawComplete();
+  } else if (_badgeImg.complete && _badgeImg.naturalWidth === 0) {
     canvas.width  = 800;
     canvas.height = 800;
-
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    grad.addColorStop(0,   "#0f0c29");
-    grad.addColorStop(0.5, "#1a1560");
-    grad.addColorStop(1,   "#312e81");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = "rgba(255,255,255,0.03)";
-    for (let x = 30; x < canvas.width; x += 38) {
-      for (let y = 30; y < canvas.height; y += 38) {
-        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#a5b4fc";
-    ctx.font      = "bold 38px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText("AI Ethics Pledge", canvas.width / 2, 140);
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fillRect(canvas.width * 0.1, 170, canvas.width * 0.8, 2);
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "22px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText("This certifies that", canvas.width / 2, 230);
-    ctx.fillStyle = "#ffffff";
-    let nSize = 64;
-    ctx.font = `bold ${nSize}px 'Segoe UI', Arial, sans-serif`;
-    while (nSize > 28 && ctx.measureText(result.name).width > canvas.width * 0.78) {
-      nSize -= 2; ctx.font = `bold ${nSize}px 'Segoe UI', Arial, sans-serif`;
-    }
-    ctx.fillText(result.name, canvas.width / 2, 320);
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fillRect(canvas.width * 0.2, 350, canvas.width * 0.6, 1);
-    ctx.fillStyle = "#94a3b8"; ctx.font = "20px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText("has completed the AI Ethics Pledge Assessment", canvas.width / 2, 400);
-    ctx.fillStyle = "#818cf8"; ctx.font = "bold 26px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText(`${result.emoji}  ${result.archetype}`, canvas.width / 2, 470);
-    ctx.fillStyle = "#64748b"; ctx.font = "italic 18px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText(`"${result.tagline}"`, canvas.width / 2, 510);
-    ctx.fillStyle = "#475569"; ctx.font = "16px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText(new Date().toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }),
-      canvas.width / 2, canvas.height - 60);
-    drawNameOnCanvas();
-  }
-
-  // Use preloaded image if ready, otherwise wait / fallback
-  if (_badgeImg.complete && _badgeImg.naturalWidth > 0) {
-    // Already cached — draw instantly, no network wait
-    drawFromImage(_badgeImg);
-  } else if (_badgeImg.complete && _badgeImg.naturalWidth === 0) {
-    // Failed to load template
-    drawFallback();
+    drawBadgeFallback(canvas, ctx, result);
+    drawComplete();
   } else {
-    // Still loading — attach handlers
-    _badgeImg.onload  = () => drawFromImage(_badgeImg);
-    _badgeImg.onerror = () => drawFallback();
+    _badgeImg.onload = () => {
+      canvas.width  = _badgeImg.naturalWidth  || 3375;
+      canvas.height = _badgeImg.naturalHeight || 3375;
+      ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
+      drawNameOnBadge(canvas, ctx, result);
+      drawComplete();
+    };
+    _badgeImg.onerror = () => {
+      canvas.width  = 800;
+      canvas.height = 800;
+      drawBadgeFallback(canvas, ctx, result);
+      drawComplete();
+    };
   }
 }
 
@@ -953,13 +960,21 @@ async function downloadFile(type) {
   const a = document.createElement("a");
   const safeName = state.userName.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-");
   
+  // Render the appropriate template
+  const canvas = $badgeCanvas;
+  const ctx = canvas.getContext("2d");
+  
   if (type === "certificate") {
+    // Render certificate template with just the name
+    await renderCertificate(canvas, ctx, state.result);
     a.download = `AI-Ethics-Certificate-${safeName}.png`;
   } else {
+    // Render badge template with full design
+    await renderBadge(canvas, ctx, state.result);
     a.download = `AI-Ethics-Badge-${safeName}.png`;
   }
   
-  a.href = $badgeCanvas.toDataURL("image/png");
+  a.href = canvas.toDataURL("image/png");
   a.click();
   
   // Track download in database
@@ -978,6 +993,85 @@ async function downloadFile(type) {
       console.warn(`Failed to track ${type} download:`, err.message);
     }
   }
+}
+
+// ─── Render Certificate (Simple - Just Name) ──────────────────────────────────
+async function renderCertificate(canvas, ctx, result) {
+  return new Promise((resolve) => {
+    function drawCertificate() {
+      if (_certImg.complete && _certImg.naturalWidth > 0) {
+        // Use certificate template
+        canvas.width = _certImg.naturalWidth || 3375;
+        canvas.height = _certImg.naturalHeight || 3375;
+        ctx.drawImage(_certImg, 0, 0, canvas.width, canvas.height);
+        
+        // Add name in the center blank space
+        // Adjust these coordinates based on your certificate template
+        ctx.save();
+        ctx.font = `bold ${Math.round(canvas.width * 0.05)}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+        ctx.fillStyle = "#000000"; // Black text for certificate
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Draw name in center (adjust Y position as needed for your template)
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height * 0.5; // 50% down - adjust this for your template
+        ctx.fillText(result.name, centerX, centerY);
+        
+        ctx.restore();
+        resolve();
+      } else {
+        // Fallback if certificate template not loaded
+        canvas.width = 3375;
+        canvas.height = 3375;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = "#000000";
+        ctx.font = "bold 80px 'Segoe UI', Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("AI Ethics Certificate", canvas.width / 2, 200);
+        ctx.font = "bold 100px 'Segoe UI', Arial, sans-serif";
+        ctx.fillText(result.name, canvas.width / 2, canvas.height / 2);
+        resolve();
+      }
+    }
+    
+    if (_certImg.complete) {
+      drawCertificate();
+    } else {
+      _certImg.onload = drawCertificate;
+      _certImg.onerror = drawCertificate;
+    }
+  });
+}
+
+// ─── Render Badge (Full Design) ───────────────────────────────────────────────
+async function renderBadge(canvas, ctx, result) {
+  return new Promise((resolve) => {
+    function drawBadge() {
+      if (_badgeImg.complete && _badgeImg.naturalWidth > 0) {
+        canvas.width = _badgeImg.naturalWidth || 3375;
+        canvas.height = _badgeImg.naturalHeight || 3375;
+        ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
+        drawNameOnBadge(canvas, ctx, result);
+        resolve();
+      } else {
+        // Fallback
+        canvas.width = 800;
+        canvas.height = 800;
+        drawBadgeFallback(canvas, ctx, result);
+        resolve();
+      }
+    }
+    
+    if (_badgeImg.complete) {
+      drawBadge();
+    } else {
+      _badgeImg.onload = drawBadge;
+      _badgeImg.onerror = drawBadge;
+    }
+  });
 }
 
 // ─── Restart — wipe all state and start fresh ─────────────────────────────────
