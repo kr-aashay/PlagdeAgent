@@ -461,6 +461,14 @@ async function startQuiz() {
 
     const data = await resp.json();
 
+    // Check if user already completed the oath
+    if (data.alreadyCompleted) {
+      showRegError(data.message || "You have already completed the AI Ethics Pledge.");
+      $startBtn.disabled = false;
+      $startBtn.textContent = "Begin Assessment →";
+      return;
+    }
+
     if (!resp.ok || !data.ok) {
       showRegError(data.error || "Registration failed. Please try again.");
       $startBtn.disabled = false;

@@ -191,6 +191,43 @@ api.post("/register", async (req, res) => {
     const cleanName = name.trim();
     const cleanIdentifier = identifier.trim().toUpperCase();
     
+    // Check if user already exists
+    let existingUser;
+    if (type === "student") {
+      const result = await mainPool.query(
+        `SELECT id, name, oath_taken, pledge_taken_at FROM students WHERE registration_no = $1`,
+        [cleanIdentifier]
+      );
+      existingUser = result.rows[0];
+    } else {
+      const result = await mainPool.query(
+        `SELECT id, name, oath_taken, pledge_taken_at FROM employees WHERE employee_id = $1`,
+        [cleanIdentifier]
+      );
+      existingUser = result.rows[0];
+    }
+    
+    // If user exists and has already taken the oath
+    if (existingUser && existingUser.oath_taken) {
+      return res.status(409).json({
+        ok: false,
+        error: "Oath already taken",
+        message: `${existingUser.name} has already completed the AI Ethics Pledge on ${new Date(existingUser.pledge_taken_at).toLocaleDateString()}.`,
+        alreadyCompleted: true
+      });
+    }
+    
+    // If user exists but hasn't taken the oath, allow them to continue
+    if (existingUser) {
+      const participantId = `${type}_${existingUser.id}`;
+      return res.status(200).json({
+        ok: true,
+        participantId,
+        message: "Welcome back! Please continue with your assessment.",
+        returning: true
+      });
+    }
+    
     // Fetch department from existing university database
     const department = await fetchDepartmentFromExistingDB(type, cleanIdentifier);
     
@@ -225,12 +262,12 @@ api.post("/register", async (req, res) => {
   } catch (err) {
     console.error("Register error:", err.message);
     
-    // Check for unique constraint violation
+    // Check for unique constraint violation (shouldn't happen now, but keep as fallback)
     if (err.code === "23505") {
       const field = type === "student" ? "registration number" : "employee ID";
       return res.status(409).json({ 
         ok: false, 
-        error: `This ${field} is already registered.` 
+        error: `This ${field} is already registered. Please use a different identifier.` 
       });
     }
     
