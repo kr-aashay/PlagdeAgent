@@ -748,7 +748,7 @@ function agreeAndReveal() {
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
 
-    renderBadge(state.result, () => {
+    renderBadgePreview(state.result, () => {
       const certOverlay = document.getElementById("certModalOverlay");
       if (certOverlay) certOverlay.style.display = "flex";
     });
@@ -913,8 +913,8 @@ function drawBadgeFallback(canvas, ctx, result) {
     canvas.width / 2, canvas.height - 60);
 }
 
-// ─── Initial Badge Render (for preview) ───────────────────────────────────────
-function renderBadge(result, onComplete) {
+// ─── Initial Badge Render (for preview modal) ─────────────────────────────────
+function renderBadgePreview(result, onComplete) {
   const canvas = $badgeCanvas;
   const ctx    = canvas.getContext("2d");
 
@@ -960,8 +960,8 @@ async function downloadFile(type) {
   const a = document.createElement("a");
   const safeName = state.userName.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-");
   
-  // Render the appropriate template
-  const canvas = $badgeCanvas;
+  // Use a separate offscreen canvas for download rendering so the on-screen preview is never affected or resized
+  const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   
   if (type === "certificate") {
@@ -1001,47 +1001,136 @@ async function renderCertificate(canvas, ctx, result) {
     function drawCertificate() {
       if (_certImg.complete && _certImg.naturalWidth > 0) {
         // Use certificate template
-        canvas.width = _certImg.naturalWidth || 3375;
-        canvas.height = _certImg.naturalHeight || 3375;
+        canvas.width = _certImg.naturalWidth || 1024;
+        canvas.height = _certImg.naturalHeight || 576;
         ctx.drawImage(_certImg, 0, 0, canvas.width, canvas.height);
         
         // Add name in the center blank space
-        // Adjust these coordinates based on your certificate template
         ctx.save();
-        ctx.font = `bold ${Math.round(canvas.width * 0.05)}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
-        ctx.fillStyle = "#000000"; // Black text for certificate
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
         
-        // Draw name in center (adjust Y position as needed for your template)
+        // We use Google Font 'Great Vibes' (cursive script), 'Playfair Display' (serif), falling back to standard Georgia
+        const fontName = "'Times New Roman', serif";
+        
+        // Scale base font size based on canvas width
+        // A size of 43px (reduced from 48px) is ideal for a 1024px canvas width
+        let fSize = Math.round(canvas.width * (43 / 1024));
+        ctx.font = `italic ${fSize}px ${fontName}`;
+        ctx.fillStyle = "#0b2265"; // Deep blue to match Vignan branding
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
+        
+        // Wrap or scale text if it exceeds 65% of the certificate width
+        const maxW = canvas.width * 0.65;
+        while (fSize > 18 && ctx.measureText(result.name).width > maxW) {
+          fSize -= 2;
+          ctx.font = `Times New Roman ${fSize}px ${fontName}`;
+        }
+        
         const centerX = canvas.width / 2;
-        const centerY = canvas.height * 0.5; // 50% down - adjust this for your template
+        const centerY = canvas.height * (302 / 576); // Baseline matches name placement coordinate just above y=307 line
         ctx.fillText(result.name, centerX, centerY);
         
         ctx.restore();
         resolve();
       } else {
-        // Fallback if certificate template not loaded
-        canvas.width = 3375;
-        canvas.height = 3375;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = "#000000";
-        ctx.font = "bold 80px 'Segoe UI', Arial, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("AI Ethics Certificate", canvas.width / 2, 200);
-        ctx.font = "bold 100px 'Segoe UI', Arial, sans-serif";
-        ctx.fillText(result.name, canvas.width / 2, canvas.height / 2);
-        resolve();
+        drawFallback();
       }
     }
     
-    if (_certImg.complete) {
+    function drawFallback() {
+      // Fallback if certificate template not loaded
+      canvas.width = 1024;
+      canvas.height = 576;
+      
+      // Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Borders
+      ctx.lineWidth = 15;
+      ctx.strokeStyle = "#0b2265";
+      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+      
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#c9a361"; // Gold
+      ctx.strokeRect(25, 25, canvas.width - 50, canvas.height - 50);
+      
+      // Header
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#0b2265";
+      ctx.font = "bold 24px 'Poppins', sans-serif";
+      ctx.fillText("CERTIFICATE OF RESPONSIBLE AND ETHICAL AI OATH", canvas.width / 2, 80);
+      
+      // Pill for Commemoration
+      ctx.fillStyle = "#0058b6";
+      const pillW = 380;
+      const pillH = 28;
+      ctx.fillRect((canvas.width - pillW) / 2, 110, pillW, pillH);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 12px 'Poppins', sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText("IN COMMEMORATION OF AGENTIC AI DAY", canvas.width / 2, 124);
+      
+      // Certify text
+      ctx.fillStyle = "#111111";
+      ctx.font = "italic 16px 'Georgia', serif";
+      ctx.fillText("This is to Certify that", canvas.width / 2, 185);
+      
+      // Draw Name
+      ctx.save();
+      const fontName = "'Great Vibes', 'Playfair Display', 'Georgia', 'Times New Roman', serif";
+      let fSize = 41; // Reduced from 46px
+      ctx.font = `italic ${fSize}px ${fontName}`;
+      ctx.fillStyle = "#0b2265";
+      ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
+      const maxW = canvas.width * 0.65;
+      while (fSize > 20 && ctx.measureText(result.name).width > maxW) {
+        fSize -= 2;
+        ctx.font = `italic ${fSize}px ${fontName}`;
+      }
+      ctx.fillText(result.name, canvas.width / 2, 302); // Draw name baseline at y=302
+      ctx.restore();
+      
+      // Line under name
+      ctx.beginPath();
+      ctx.moveTo(300, 307);
+      ctx.lineTo(724, 307);
+      ctx.strokeStyle = "#99a0ba";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      
+      // Description
+      ctx.fillStyle = "#0b2265";
+      ctx.font = "14px 'Poppins', sans-serif";
+      const desc1 = "has participated in Ethical and Responsible AI Oath held on the occasion of";
+      const desc2 = "Agentic AI Day, Organized by the Vignan's Foundation for Science, Technology and Research,";
+      const desc3 = "on 29, August 2026.";
+      ctx.fillText(desc1, canvas.width / 2, 345);
+      ctx.fillText(desc2, canvas.width / 2, 370);
+      ctx.fillText(desc3, canvas.width / 2, 395);
+      
+      // Footer text
+      ctx.fillStyle = "#c9a361";
+      ctx.font = "bold 13px 'Poppins', sans-serif";
+      ctx.fillText("INNOVATE WITH INTELLIGENCE. LEAD WITH RESPONSIBILITY.", canvas.width / 2, 435);
+      
+      // Signature
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 11px 'Poppins', sans-serif";
+      ctx.fillText("Dr. Lavu Rathaiah", canvas.width - 200, 485);
+      ctx.font = "10px 'Poppins', sans-serif";
+      ctx.fillText("Chairman, Vignan Group of Institutions", canvas.width - 200, 500);
+      
+      resolve();
+    }
+    
+    if (_certImg.complete && _certImg.naturalWidth > 0) {
       drawCertificate();
+    } else if (_certImg.complete && _certImg.naturalWidth === 0) {
+      drawFallback();
     } else {
       _certImg.onload = drawCertificate;
-      _certImg.onerror = drawCertificate;
+      _certImg.onerror = drawFallback;
     }
   });
 }

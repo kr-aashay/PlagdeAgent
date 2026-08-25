@@ -142,6 +142,15 @@ async function testDuplicateRegistration() {
   
   logTest("First registration succeeds", first.status === 201);
   
+  // Complete pledge for first user so they are marked as oath taken
+  if (first.data && first.data.participantId) {
+    await makeRequest("POST", "/pledge-complete", {
+      participantId: first.data.participantId,
+      archetype: "Ethics Vanguard",
+      totalRetries: 0
+    });
+  }
+  
   // Duplicate registration
   const duplicate = await makeRequest("POST", "/register", {
     name: "Duplicate Test",
