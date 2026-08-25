@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "init-db": "node init-db.js",
+    "test": "node test-endpoints.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -17,8 +19,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mongodb": "^7.5.0",
-    "mongoose": "^9.9.1",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "pg": "^8.23.0"
   }
 }

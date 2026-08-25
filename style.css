@@ -707,7 +707,7 @@ html, body {
 }
 .badge-summary strong { color: var(--wa-text); }
 
-.badge-actions { display: flex; gap: 8px; }
+.badge-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn-download {
   flex: 1; background: var(--wa-green); color: #fff;
   border: none; border-radius: var(--r-sm);
@@ -717,6 +717,14 @@ html, body {
   box-shadow: 0 2px 12px rgba(0,168,132,0.3);
 }
 .btn-download:hover { background: #00bf97; box-shadow: 0 2px 18px rgba(0,168,132,0.45); }
+.btn-download.btn-certificate {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 2px 12px rgba(99,102,241,0.3);
+}
+.btn-download.btn-certificate:hover {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  box-shadow: 0 2px 18px rgba(99,102,241,0.45);
+}
 .btn-download.locked {
   background: rgba(255,255,255,0.06); color: var(--wa-text-muted);
   border: 1px solid rgba(255,255,255,0.08); cursor: not-allowed;

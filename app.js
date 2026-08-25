@@ -259,7 +259,8 @@ const $sendBtn      = document.getElementById("sendBtn");
 const $badgeHolder  = document.getElementById("badgePlaceholder");
 const $badgeResult  = document.getElementById("badgeResult");
 const $badgeCanvas  = document.getElementById("badgeCanvas");
-const $downloadBtn  = document.getElementById("downloadBtn");
+const $downloadCertBtn = document.getElementById("downloadCertBtn");
+const $downloadBadgeBtn = document.getElementById("downloadBadgeBtn");
 const $restartBtn   = document.getElementById("restartBtn");
 const $badgeSummary = document.getElementById("badgeSummary");
 const $statusText   = document.getElementById("statusText");
@@ -735,8 +736,7 @@ function agreeAndReveal() {
 
     addMsg("agent",
       `🏅 <strong>Your commitment is recorded, ${esc(state.userName)}!</strong><br><br>
-       Your personalised Ethics Badge has been generated.
-       Download it as a reminder of your pledge to responsible AI.<br><br>
+       You can now download your <strong>Certificate</strong> or <strong>Badge</strong> (or both!) as a reminder of your pledge to responsible AI.<br><br>
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
 
@@ -745,8 +745,8 @@ function agreeAndReveal() {
       if (certOverlay) certOverlay.style.display = "flex";
     });
 
-    $downloadBtn.classList.remove("locked");
-    $downloadBtn.textContent = "⬇ Download Badge";
+    $downloadCertBtn.classList.remove("locked");
+    $downloadBadgeBtn.classList.remove("locked");
     $chatInputBar.style.display = "flex";
   }, 1000);
 }
@@ -940,13 +940,36 @@ function renderBadge(result, onComplete) {
   }
 }
 
-// ─── Download badge ─────────────────────────────────────────────────────
-function downloadBadge() {
-  const a      = document.createElement("a");
+// ─── Download badge or certificate with tracking ──────────────────────────────
+async function downloadFile(type) {
+  const a = document.createElement("a");
   const safeName = state.userName.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-");
-  a.download   = `AI-Ethics-Badge-${safeName}.png`;
-  a.href       = $badgeCanvas.toDataURL("image/png");
+  
+  if (type === "certificate") {
+    a.download = `AI-Ethics-Certificate-${safeName}.png`;
+  } else {
+    a.download = `AI-Ethics-Badge-${safeName}.png`;
+  }
+  
+  a.href = $badgeCanvas.toDataURL("image/png");
   a.click();
+  
+  // Track download in database
+  if (state.participantId && !String(state.participantId).startsWith("offline_")) {
+    try {
+      await fetch(`${API_BASE}/track-download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId: state.participantId,
+          downloadType: type
+        })
+      });
+      console.log(`${type} download tracked successfully`);
+    } catch (err) {
+      console.warn(`Failed to track ${type} download:`, err.message);
+    }
+  }
 }
 
 // ─── Restart — wipe all state and start fresh ─────────────────────────────────
@@ -987,8 +1010,8 @@ function restart() {
   const hintEl  = document.getElementById("pledgeScrollHint");
   if (agreeEl) agreeEl.disabled = true;
   if (hintEl)  hintEl.classList.remove("hidden");
-  $downloadBtn.classList.add("locked");
-  $downloadBtn.textContent = "Download Badge";
+  $downloadCertBtn.classList.add("locked");
+  $downloadBadgeBtn.classList.add("locked");
 
   setStatus("Ready");
   showWelcome();
@@ -1010,9 +1033,11 @@ $agreeBtn.addEventListener("click",   agreeAndReveal);
 $sendBtn.addEventListener("click",   sendFreeChat);
 $chatInput.addEventListener("keydown", e => { if (e.key === "Enter") sendFreeChat(); });
 
-$downloadBtn.addEventListener("click", downloadBadge);
+$downloadCertBtn.addEventListener("click", () => downloadFile("certificate"));
+$downloadBadgeBtn.addEventListener("click", () => downloadFile("badge"));
 $restartBtn.addEventListener("click",  restart);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-$downloadBtn.classList.add("locked");   // locked until pledge is agreed
+$downloadCertBtn.classList.add("locked");   // locked until pledge is agreed
+$downloadBadgeBtn.classList.add("locked");  // locked until pledge is agreed
 showWelcome();
