@@ -429,14 +429,9 @@ function setType(type) {
 
 // ─── Registration submission → POST /api/register ─────────────────────────────
 async function startQuiz() {
-  const name       = $nameInput.value.trim();
   const identifier = $regIdInput.value.trim().toUpperCase();
 
   // Client-side validation
-  if (!name) {
-    showRegError("Please enter your full name.");
-    $nameInput.focus(); return;
-  }
   if (!identifier) {
     const label = state.userType === "student" ? "registration number" : "employee ID";
     showRegError(`Please enter your ${label}.`);
@@ -453,7 +448,6 @@ async function startQuiz() {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
-        name,
         type:       state.userType,
         identifier
       })
@@ -470,25 +464,24 @@ async function startQuiz() {
     }
 
     if (!resp.ok || !data.ok) {
-      showRegError(data.error || "Registration failed. Please try again.");
+      showRegError(data.message || data.error || "Registration failed. Please check your ID.");
       $startBtn.disabled = false;
       $startBtn.textContent = "Begin Assessment →";
       return;
     }
 
-    // Store in state
-    state.userName       = name;
+    // Store in state (name is returned by the database lookup)
+    state.userName       = data.name;
     state.userIdentifier = identifier;
     state.participantId  = data.participantId;
     state.phase          = "quiz";
 
   } catch (err) {
-    // Server unreachable — continue offline, badge still generates
-    console.warn("Registration API unreachable, continuing offline:", err.message);
-    state.userName       = name;
-    state.userIdentifier = identifier;
-    state.participantId  = null;
-    state.phase          = "quiz";
+    console.warn("Registration API unreachable:", err.message);
+    showRegError("Server connection failed. Registration requires an active university record check.");
+    $startBtn.disabled = false;
+    $startBtn.textContent = "Begin Assessment →";
+    return;
   }
 
   // Hide reg bar, show progress pill
@@ -744,9 +737,12 @@ function agreeAndReveal() {
 
     addMsg("agent",
       `🏅 <strong>Your commitment is recorded, ${esc(state.userName)}!</strong><br><br>
-       You can now download your <strong>Certificate</strong> or <strong>Badge</strong> (or both!) as a reminder of your pledge to responsible AI.<br><br>
+       Your personalised certificate is downloading automatically. You can also download your <strong>AI Ethics Badge</strong> below.<br><br>
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
+
+    // Automatically trigger certificate download
+    downloadFile("certificate").catch(err => console.warn("Auto certificate download failed:", err.message));
 
     renderBadgePreview(state.result, () => {
       const certOverlay = document.getElementById("certModalOverlay");

@@ -76,10 +76,10 @@
             </button>
           </div>
 
-          <!-- Name row -->
-          <div class="reg-field-row">
+          <!-- Name row (hidden) -->
+          <div class="reg-field-row" style="display:none;">
             <span class="reg-field-icon">👤</span>
-            <input type="text" id="nameInput" class="wa-text-input reg-input" placeholder="Full name…" maxlength="60"
+            <input type="text" id="nameInput" class="wa-text-input reg-input" value="TEMP" placeholder="Full name…" maxlength="60"
               autocomplete="off" spellcheck="false" />
           </div>
 
@@ -194,7 +194,7 @@
         <div class="cert-modal-footer">
           <div class="badge-summary" id="badgeSummary"></div>
           <div class="badge-actions">
-            <button class="btn-download btn-certificate" id="downloadCertBtn">📜 Download Certificate</button>
+            <button class="btn-download btn-certificate" id="downloadCertBtn" style="display:none;">📜 Download Certificate</button>
             <button class="btn-download btn-badge" id="downloadBadgeBtn">🏅 Download Badge</button>
           </div>
           <div class="badge-actions" style="margin-top: 1rem;">

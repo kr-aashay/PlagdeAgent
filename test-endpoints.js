@@ -217,40 +217,21 @@ async function testGetParticipants() {
 
 async function testValidation() {
   log("\n✅ Testing Input Validation...", colors.blue);
-  
-  // Missing name
-  const noName = await makeRequest("POST", "/register", {
-    type: "student",
-    identifier: "TEST123"
-  });
-  logTest("Rejects missing name", noName.status === 400);
-  
   // Missing type
   const noType = await makeRequest("POST", "/register", {
-    name: "Test User",
     identifier: "TEST123"
   });
   logTest("Rejects missing type", noType.status === 400);
   
   // Invalid type
   const invalidType = await makeRequest("POST", "/register", {
-    name: "Test User",
     type: "invalid",
     identifier: "TEST123"
   });
   logTest("Rejects invalid type", invalidType.status === 400);
   
-  // Short name
-  const shortName = await makeRequest("POST", "/register", {
-    name: "A",
-    type: "student",
-    identifier: "TEST123"
-  });
-  logTest("Rejects short name", shortName.status === 400);
-  
   // Short identifier
   const shortId = await makeRequest("POST", "/register", {
-    name: "Test User",
     type: "student",
     identifier: "A"
   });
