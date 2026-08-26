@@ -82,7 +82,19 @@ This will:
 - Add constraints for data integrity
 - Verify the setup
 
-### 5. Start the Server
+### 5. Seed Mock Data (Optional)
+
+To populate the database tables with some sample student and employee records for local development and testing:
+
+```bash
+npm run seed
+```
+
+This will:
+- Truncate any existing data in the `students` and `employees` tables
+- Insert 6 dummy student records and 4 employee records with varying progress states for local testing
+
+### 6. Start the Server
 
 ```bash
 npm start
