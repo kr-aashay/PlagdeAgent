@@ -39,21 +39,34 @@ def main():
     students_data = []
     seen_reg = set()
     
-    # Column indices:
-    # 0: registerno, 1: name, 5: branchname
+    # Column indices: 0=registerno, 1=name, 2=vuid, 3=coursename, 
+    #                 4=branch_shortname, 5=branchname, 6=cyear, 7=sectioncode
     for row in sheet_students.iter_rows(min_row=2, values_only=True):
-        reg = row[0]
+        registerno = row[0]
         name = row[1]
-        branch = row[5] # branchname is 6th column (index 5)
+        vuid = row[2]
+        coursename = row[3]
+        branch_shortname = row[4]
+        branchname = row[5]
+        cyear = row[6]
+        sectioncode = row[7]
         
-        if reg and name:
-            reg_str = str(reg).strip().upper()
+        if registerno and name:
+            registerno_str = str(registerno).strip().upper()
             name_str = str(name).strip()
-            branch_str = str(branch).strip() if branch else ""
+            vuid_str = str(vuid).strip() if vuid else ""
+            coursename_str = str(coursename).strip() if coursename else ""
+            branch_shortname_str = str(branch_shortname).strip() if branch_shortname else ""
+            branchname_str = str(branchname).strip() if branchname else ""
+            cyear_str = str(cyear).strip() if cyear else ""
+            sectioncode_str = str(sectioncode).strip() if sectioncode else ""
             
-            if reg_str not in seen_reg:
-                seen_reg.add(reg_str)
-                students_data.append((name_str, reg_str, branch_str))
+            if registerno_str not in seen_reg:
+                seen_reg.add(registerno_str)
+                students_data.append((
+                    registerno_str, name_str, vuid_str, coursename_str,
+                    branch_shortname_str, branchname_str, cyear_str, sectioncode_str
+                ))
                 
     print(f"📖 Parsed {len(students_data)} unique students in {time.time() - t0:.2f} seconds.\n")
     
@@ -89,7 +102,9 @@ def main():
     t0 = time.time()
     execute_values(
         cur,
-        "INSERT INTO students (name, registration_no, department) VALUES %s",
+        """INSERT INTO students 
+           (registerno, name, vuid, coursename, branch_shortname, branchname, cyear, sectioncode) 
+           VALUES %s""",
         students_data
     )
     conn.commit()
