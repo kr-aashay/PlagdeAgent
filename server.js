@@ -598,16 +598,20 @@ api.get("/admin/stats", async (req, res) => {
   }
 });
 
-// GET /APO/admin/export/registered - Export registered participants to Excel
+// GET /APO/admin/export/registered - Export registered students to Excel
 api.get("/admin/export/registered", async (req, res) => {
   try {
-    // Fetch all registered participants
+    // Fetch all registered students with new attributes
     const result = await mainPool.query(`
       SELECT 
-        'Student' as "Type",
-        registration_no as "ID",
+        registerno as "Register No",
         name as "Name",
-        department as "Department",
+        vuid as "VU ID",
+        coursename as "Course Name",
+        branch_shortname as "Branch Short Name",
+        branchname as "Branch Name",
+        cyear as "Year",
+        sectioncode as "Section",
         archetype as "Archetype",
         total_retries as "Total Retries",
         TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Registered At",
@@ -616,24 +620,7 @@ api.get("/admin/export/registered", async (req, res) => {
         CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
       FROM students
       WHERE oath_taken = true
-      
-      UNION ALL
-      
-      SELECT 
-        'Employee' as "Type",
-        employee_id as "ID",
-        name as "Name",
-        department as "Department",
-        archetype as "Archetype",
-        total_retries as "Total Retries",
-        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Registered At",
-        TO_CHAR(pledge_taken_at, 'YYYY-MM-DD HH24:MI:SS') as "Pledge Taken At",
-        CASE WHEN certificate_downloaded THEN 'Yes' ELSE 'No' END as "Certificate Downloaded",
-        CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
-      FROM employees
-      WHERE oath_taken = true
-      
-      ORDER BY "Pledge Taken At" DESC
+      ORDER BY pledge_taken_at DESC
     `);
     
     // Create Excel workbook
@@ -659,32 +646,24 @@ api.get("/admin/export/registered", async (req, res) => {
   }
 });
 
-// GET /APO/admin/export/unregistered - Export unregistered participants to Excel
+// GET /APO/admin/export/unregistered - Export unregistered students to Excel
 api.get("/admin/export/unregistered", async (req, res) => {
   try {
-    // Fetch all unregistered participants
+    // Fetch all unregistered students with new attributes
     const result = await mainPool.query(`
       SELECT 
-        'Student' as "Type",
-        registration_no as "ID",
+        registerno as "Register No",
         name as "Name",
-        department as "Department",
+        vuid as "VU ID",
+        coursename as "Course Name",
+        branch_shortname as "Branch Short Name",
+        branchname as "Branch Name",
+        cyear as "Year",
+        sectioncode as "Section",
         TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
       FROM students
       WHERE oath_taken = false OR oath_taken IS NULL
-      
-      UNION ALL
-      
-      SELECT 
-        'Employee' as "Type",
-        employee_id as "ID",
-        name as "Name",
-        department as "Department",
-        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
-      FROM employees
-      WHERE oath_taken = false OR oath_taken IS NULL
-      
-      ORDER BY "Name" ASC
+      ORDER BY name ASC
     `);
     
     // Create Excel workbook
