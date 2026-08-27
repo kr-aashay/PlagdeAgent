@@ -1036,7 +1036,7 @@ async function renderCertificate(canvas, ctx, result) {
         }
         
         const centerX = canvas.width / 2;
-        const centerY = canvas.height * (302 / 576); // Baseline matches name placement coordinate just above y=307 line
+        const centerY = canvas.height * (295 / 576); // Position name higher above the line
         ctx.fillText(result.name, centerX, centerY);
         
         ctx.restore();
@@ -1112,7 +1112,7 @@ async function renderCertificate(canvas, ctx, result) {
         fSize -= 1;
         ctx.font = `italic ${fSize}px ${fontName}`;
       }
-      ctx.fillText(result.name, canvas.width / 2, 302); // Draw name baseline at y=302
+      ctx.fillText(result.name, canvas.width / 2, 295); // Draw name higher above the line at y=307
       ctx.restore();
       
       // Line under name
