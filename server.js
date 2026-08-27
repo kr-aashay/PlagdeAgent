@@ -58,6 +58,14 @@ if (EXISTING_DB_URL) {
 
 let dbReady = false;
 
+async function tableExists(tableName) {
+  const result = await mainPool.query(
+    "SELECT to_regclass($1) IS NOT NULL AS exists",
+    [`public.${tableName}`]
+  );
+  return result.rows[0].exists;
+}
+
 // Test main database connection
 mainPool.query("SELECT NOW()")
   .then(() => {
@@ -454,8 +462,7 @@ api.post("/track-download", async (req, res) => {
 // GET /APO/participants  (admin)
 api.get("/participants", async (req, res) => {
   try {
-    // Union query to fetch from both students and employees tables
-    const result = await mainPool.query(`
+    const queries = [`
       SELECT 
         'student' as type,
         id,
@@ -472,10 +479,13 @@ api.get("/participants", async (req, res) => {
         badge_downloaded,
         badge_downloaded_at
       FROM students
-      
+      `
+    ];
+
+    if (await tableExists("employees")) {
+      queries.push(`
       UNION ALL
-      
-      SELECT 
+      SELECT
         'employee' as type,
         id,
         name,
@@ -491,7 +501,10 @@ api.get("/participants", async (req, res) => {
         badge_downloaded,
         badge_downloaded_at
       FROM employees
-      
+      `);
+    }
+
+    const result = await mainPool.query(`${queries.join("\n")}
       ORDER BY registered_at DESC
     `);
     
@@ -513,6 +526,8 @@ api.get("/participants", async (req, res) => {
 // GET /APO/admin/stats - Admin dashboard statistics
 api.get("/admin/stats", async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+
     // Get counts from both tables
     const studentsResult = await mainPool.query(`
       SELECT 
@@ -521,12 +536,14 @@ api.get("/admin/stats", async (req, res) => {
       FROM students
     `);
     
-    const employeesResult = await mainPool.query(`
+    const employeesResult = (await tableExists("employees"))
+      ? await mainPool.query(`
       SELECT 
         COUNT(*) as total,
         COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
       FROM employees
-    `);
+    `)
+      : { rows: [{ total: 0, registered: 0 }] };
     
     const studentsTotal = parseInt(studentsResult.rows[0].total);
     const studentsRegistered = parseInt(studentsResult.rows[0].registered);
@@ -538,7 +555,7 @@ api.get("/admin/stats", async (req, res) => {
     const totalUnregistered = totalExpected - totalRegistered;
     
     // Get recent registrations (last 10)
-    const recentResult = await mainPool.query(`
+    const recentQueries = [`
       SELECT 
         'student' as type,
         id,
@@ -549,10 +566,13 @@ api.get("/admin/stats", async (req, res) => {
         registered_at
       FROM students
       WHERE oath_taken = true
-      
+      `
+    ];
+
+    if (await tableExists("employees")) {
+      recentQueries.push(`
       UNION ALL
-      
-      SELECT 
+      SELECT
         'employee' as type,
         id,
         name,
@@ -562,7 +582,10 @@ api.get("/admin/stats", async (req, res) => {
         registered_at
       FROM employees
       WHERE oath_taken = true
-      
+      `);
+    }
+
+    const recentResult = await mainPool.query(`${recentQueries.join("\n")}
       ORDER BY registered_at DESC
       LIMIT 10
     `);
@@ -708,13 +731,16 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use("/oath", express.static(STATIC_DIR));
-app.use(express.static(STATIC_DIR));
-
-// Admin page route
-app.get("/oath.admin", (req, res) => {
+// Admin page routes - handle all variations BEFORE static files
+app.get(["/oath/admin", "/oath/admin.html", "/admin", "/oath.admin"], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, "admin.html"));
 });
+
+app.use("/oath", express.static(STATIC_DIR));
+app.use(express.static(STATIC_DIR));
 
 /* ─── Graceful Shutdown ─────────────────────────────────────────────────────── */
 process.on("SIGTERM", async () => {

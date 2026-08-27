@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Admin Dashboard - AI Ethics Pledge</title>
     <link rel="stylesheet" href="admin.css">
 </head>
@@ -101,13 +104,26 @@
                     </span>
                 </button>
             </div>
+            
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <small style="color: #718096;">
+                    💡 <strong>Keyboard shortcuts:</strong> 
+                    Ctrl+R (Refresh) • Ctrl+D (Download Registered) • Ctrl+U (Download Unregistered)
+                </small>
+            </div>
         </div>
 
         <div class="actions-section" style="margin-bottom: 20px;">
-            <h2>Actions</h2>
-            <button class="refresh-now-btn" onclick="refreshNow()" style="padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.2s;">
-                🔄 Refresh Dashboard
-            </button>
+            <h2>Dashboard Controls</h2>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <button class="refresh-now-btn" onclick="refreshNow()">
+                    🔄 Refresh Dashboard
+                </button>
+                
+                <button id="autoRefreshBtn" class="auto-refresh-btn" onclick="toggleAutoRefresh()">
+                    🔄 Enable Auto-refresh
+                </button>
+            </div>
         </div>
 
         <div class="recent-registrations">

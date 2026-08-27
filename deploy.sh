@@ -62,7 +62,7 @@ ssh "${SERVER_USER}@${SERVER_HOST}" "
 ok "PM2 reloaded"
 
 # ── 5. Install / reload nginx config ──────────────────────────────────────
-step "Installing nginx config"
+step "Installing nginx config and clearing caches"
 ssh "${SERVER_USER}@${SERVER_HOST}" "
   sudo cp ${SERVER_DIR}/nginx.conf /etc/nginx/sites-available/ai-pledge
   # Only create symlink if it doesn't exist
@@ -70,8 +70,11 @@ ssh "${SERVER_USER}@${SERVER_HOST}" "
     sudo ln -s /etc/nginx/sites-available/ai-pledge /etc/nginx/sites-enabled/ai-pledge
   fi
   sudo nginx -t && sudo systemctl reload nginx
+  
+  # Clear any potential caches
+  sudo find /var/cache/nginx -type f -delete 2>/dev/null || true
 "
-ok "nginx reloaded"
+ok "nginx reloaded and caches cleared"
 
 # ── 6. Health check ───────────────────────────────────────────────────────
 step "Health check"
@@ -82,6 +85,7 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
 if [ "$HTTP_CODE" = "200" ]; then
   ok "API is live → https://${SERVER_HOST}/APO/health"
   ok "Frontend  → https://${SERVER_HOST}/oath"
+  ok "Admin     → https://${SERVER_HOST}/oath/admin"
 else
   echo "⚠️  Health check returned HTTP ${HTTP_CODE}."
   echo "   Check server logs: ssh ${SERVER_USER}@${SERVER_HOST} 'pm2 logs ai-pledge --lines 30'"

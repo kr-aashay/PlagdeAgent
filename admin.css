@@ -235,6 +235,40 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
+.auto-refresh-btn {
+    padding: 12px 24px;
+    background: #38a169;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auto-refresh-btn:hover {
+    background: #2f855a !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.auto-refresh-btn.auto-refresh-active {
+    background: #e53e3e;
+}
+
+.auto-refresh-btn.auto-refresh-active:hover {
+    background: #c53030 !important;
+}
+
+.export-btn:disabled,
+.refresh-now-btn:disabled,
+.auto-refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
 .table-container {
     overflow-x: auto;
 }
