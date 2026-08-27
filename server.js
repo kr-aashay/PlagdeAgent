@@ -18,6 +18,7 @@ require("dotenv").config();
 const express = require("express");
 const path    = require("path");
 const { Pool } = require("pg");
+const XLSX = require("xlsx");
 
 const app     = express();
 const PORT    = process.env.PORT     || 6003;
@@ -508,6 +509,207 @@ api.get("/participants", async (req, res) => {
   }
 });
 
+// GET /APO/admin/stats - Admin dashboard statistics
+api.get("/admin/stats", async (req, res) => {
+  try {
+    // Get counts from both tables
+    const studentsResult = await mainPool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM students
+    `);
+    
+    const employeesResult = await mainPool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM employees
+    `);
+    
+    const studentsTotal = parseInt(studentsResult.rows[0].total);
+    const studentsRegistered = parseInt(studentsResult.rows[0].registered);
+    const employeesTotal = parseInt(employeesResult.rows[0].total);
+    const employeesRegistered = parseInt(employeesResult.rows[0].registered);
+    
+    const totalRegistered = studentsRegistered + employeesRegistered;
+    const totalExpected = studentsTotal + employeesTotal;
+    const totalUnregistered = totalExpected - totalRegistered;
+    
+    // Get recent registrations (last 10)
+    const recentResult = await mainPool.query(`
+      SELECT 
+        'student' as type,
+        id,
+        name,
+        registration_no as id_number,
+        department,
+        oath_taken,
+        registered_at
+      FROM students
+      WHERE oath_taken = true
+      
+      UNION ALL
+      
+      SELECT 
+        'employee' as type,
+        id,
+        name,
+        employee_id as id_number,
+        department,
+        oath_taken,
+        registered_at
+      FROM employees
+      WHERE oath_taken = true
+      
+      ORDER BY registered_at DESC
+      LIMIT 10
+    `);
+    
+    return res.json({
+      ok: true,
+      total: totalExpected,
+      registered: {
+        total: totalRegistered,
+        students: studentsRegistered,
+        employees: employeesRegistered
+      },
+      unregistered: {
+        total: totalUnregistered,
+        students: studentsTotal - studentsRegistered,
+        employees: employeesTotal - employeesRegistered
+      },
+      recentRegistrations: recentResult.rows.map(row => ({
+        type: row.type,
+        id: row.id_number,
+        name: row.name,
+        department: row.department,
+        oath_taken: row.oath_taken,
+        registered_at: row.registered_at
+      }))
+    });
+    
+  } catch (err) {
+    console.error("Admin stats error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Database error." 
+    });
+  }
+});
+
+// GET /APO/admin/export/registered - Export registered participants to Excel
+api.get("/admin/export/registered", async (req, res) => {
+  try {
+    // Fetch all registered participants
+    const result = await mainPool.query(`
+      SELECT 
+        'Student' as "Type",
+        registration_no as "ID",
+        name as "Name",
+        department as "Department",
+        archetype as "Archetype",
+        total_retries as "Total Retries",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Registered At",
+        TO_CHAR(pledge_taken_at, 'YYYY-MM-DD HH24:MI:SS') as "Pledge Taken At",
+        CASE WHEN certificate_downloaded THEN 'Yes' ELSE 'No' END as "Certificate Downloaded",
+        CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
+      FROM students
+      WHERE oath_taken = true
+      
+      UNION ALL
+      
+      SELECT 
+        'Employee' as "Type",
+        employee_id as "ID",
+        name as "Name",
+        department as "Department",
+        archetype as "Archetype",
+        total_retries as "Total Retries",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Registered At",
+        TO_CHAR(pledge_taken_at, 'YYYY-MM-DD HH24:MI:SS') as "Pledge Taken At",
+        CASE WHEN certificate_downloaded THEN 'Yes' ELSE 'No' END as "Certificate Downloaded",
+        CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
+      FROM employees
+      WHERE oath_taken = true
+      
+      ORDER BY "Pledge Taken At" DESC
+    `);
+    
+    // Create Excel workbook
+    const worksheet = XLSX.utils.json_to_sheet(result.rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Registered");
+    
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=registered_${Date.now()}.xlsx`);
+    
+    return res.send(excelBuffer);
+    
+  } catch (err) {
+    console.error("Export registered error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Export failed." 
+    });
+  }
+});
+
+// GET /APO/admin/export/unregistered - Export unregistered participants to Excel
+api.get("/admin/export/unregistered", async (req, res) => {
+  try {
+    // Fetch all unregistered participants
+    const result = await mainPool.query(`
+      SELECT 
+        'Student' as "Type",
+        registration_no as "ID",
+        name as "Name",
+        department as "Department",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
+      FROM students
+      WHERE oath_taken = false OR oath_taken IS NULL
+      
+      UNION ALL
+      
+      SELECT 
+        'Employee' as "Type",
+        employee_id as "ID",
+        name as "Name",
+        department as "Department",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
+      FROM employees
+      WHERE oath_taken = false OR oath_taken IS NULL
+      
+      ORDER BY "Name" ASC
+    `);
+    
+    // Create Excel workbook
+    const worksheet = XLSX.utils.json_to_sheet(result.rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Unregistered");
+    
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=unregistered_${Date.now()}.xlsx`);
+    
+    return res.send(excelBuffer);
+    
+  } catch (err) {
+    console.error("Export unregistered error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Export failed." 
+    });
+  }
+});
+
 // Mount the router
 app.use(API_PATH, api);
 
@@ -528,6 +730,11 @@ app.use((req, res, next) => {
 
 app.use("/oath", express.static(STATIC_DIR));
 app.use(express.static(STATIC_DIR));
+
+// Admin page route
+app.get("/oath.admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
 
 /* ─── Graceful Shutdown ─────────────────────────────────────────────────────── */
 process.on("SIGTERM", async () => {
