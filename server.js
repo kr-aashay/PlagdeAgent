@@ -165,7 +165,8 @@ api.post("/register", async (req, res) => {
     });
   }
   
-  if (identifier.trim().length < 2) {
+  const minLength = type === "student" ? 2 : 1;
+  if (identifier.trim().length < minLength) {
     return res.status(400).json({ 
       ok: false, 
       error: "ID is too short." 
