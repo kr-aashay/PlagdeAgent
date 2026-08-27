@@ -1004,22 +1004,35 @@ async function renderCertificate(canvas, ctx, result) {
         // Add name in the center blank space
         ctx.save();
         
-        // We use Google Font 'Great Vibes' (cursive script), 'Playfair Display' (serif), falling back to standard Georgia
+        // We use Times New Roman for elegant certificate style
         const fontName = "'Times New Roman', serif";
         
-        // Scale base font size based on canvas width
-        // A size of 43px (reduced from 48px) is ideal for a 1024px canvas width
-        let fSize = Math.round(canvas.width * (43 / 1024));
-        ctx.font = `italic ${fSize}px ${fontName}`;
+        // Dynamic font sizing based on name length
+        // Maximum 40px for short names, scales down for longer names
+        const maxW = canvas.width * 0.70; // Allow 70% width for name
+        const nameLength = result.name.length;
+        
+        // Calculate starting font size based on name length
+        let fSize;
+        if (nameLength <= 15) {
+          fSize = 40; // Short names get larger size
+        } else if (nameLength <= 25) {
+          fSize = 36; // Medium names
+        } else if (nameLength <= 35) {
+          fSize = 32; // Long names
+        } else {
+          fSize = 28; // Very long names
+        }
+        
         ctx.fillStyle = "#0b2265"; // Deep blue to match Vignan branding
         ctx.textAlign = "center";
-        ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
+        ctx.textBaseline = "alphabetic";
+        ctx.font = `italic ${fSize}px ${fontName}`;
         
-        // Wrap or scale text if it exceeds 65% of the certificate width
-        const maxW = canvas.width * 0.65;
-        while (fSize > 18 && ctx.measureText(result.name).width > maxW) {
-          fSize -= 2;
-          ctx.font = `Times New Roman ${fSize}px ${fontName}`;
+        // Further reduce if text still exceeds max width
+        while (fSize > 20 && ctx.measureText(result.name).width > maxW) {
+          fSize -= 1;
+          ctx.font = `italic ${fSize}px ${fontName}`;
         }
         
         const centerX = canvas.width / 2;
@@ -1074,14 +1087,29 @@ async function renderCertificate(canvas, ctx, result) {
       
       // Draw Name
       ctx.save();
-      const fontName = "'Great Vibes', 'Playfair Display', 'Georgia', 'Times New Roman', serif";
-      let fSize = 41; // Reduced from 46px
+      const fontName = "'Times New Roman', serif";
+      
+      // Dynamic font sizing based on name length
+      const nameLength = result.name.length;
+      let fSize;
+      if (nameLength <= 15) {
+        fSize = 40; // Short names get larger size
+      } else if (nameLength <= 25) {
+        fSize = 36; // Medium names
+      } else if (nameLength <= 35) {
+        fSize = 32; // Long names
+      } else {
+        fSize = 28; // Very long names
+      }
+      
       ctx.font = `italic ${fSize}px ${fontName}`;
       ctx.fillStyle = "#0b2265";
-      ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
-      const maxW = canvas.width * 0.65;
+      ctx.textBaseline = "alphabetic";
+      const maxW = canvas.width * 0.70;
+      
+      // Further reduce if text still exceeds max width
       while (fSize > 20 && ctx.measureText(result.name).width > maxW) {
-        fSize -= 2;
+        fSize -= 1;
         ctx.font = `italic ${fSize}px ${fontName}`;
       }
       ctx.fillText(result.name, canvas.width / 2, 302); // Draw name baseline at y=302
