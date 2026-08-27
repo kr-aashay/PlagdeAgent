@@ -190,7 +190,7 @@ api.post("/register", async (req, res) => {
     let existingUser;
     if (type === "student") {
       const result = await mainPool.query(
-        `SELECT id, name, department, oath_taken, pledge_taken_at FROM students WHERE registration_no = $1`,
+        `SELECT id, name, branchname as department, oath_taken, pledge_taken_at FROM students WHERE registerno = $1`,
         [cleanIdentifier]
       );
       existingUser = result.rows[0];
@@ -213,7 +213,7 @@ api.post("/register", async (req, res) => {
         
         if (type === "student") {
           result = await mainPool.query(
-            `INSERT INTO students (name, registration_no, department) VALUES ($1, $2, $3) RETURNING id`,
+            `INSERT INTO students (name, registerno, branchname) VALUES ($1, $2, $3) RETURNING id`,
             [dummyName, cleanIdentifier, testDept]
           );
         } else {
@@ -319,7 +319,7 @@ api.post("/pledge-complete", async (req, res) => {
              total_retries = $2, 
              pledge_taken_at = CURRENT_TIMESTAMP
          WHERE id = $3
-         RETURNING id, name, registration_no as identifier, department, 
+         RETURNING id, name, registerno as identifier, branchname as department, 
                    oath_taken, archetype, total_retries, pledge_taken_at,
                    certificate_downloaded, badge_downloaded`,
         [archetype || "", Number(totalRetries) || 0, id]
@@ -459,8 +459,8 @@ api.get("/participants", async (req, res) => {
         'student' as type,
         id,
         name,
-        registration_no as identifier,
-        department,
+        registerno as identifier,
+        branchname as department,
         oath_taken,
         archetype,
         total_retries,
@@ -542,8 +542,8 @@ api.get("/admin/stats", async (req, res) => {
         'student' as type,
         id,
         name,
-        registration_no as id_number,
-        department,
+        registerno as id_number,
+        branchname as department,
         oath_taken,
         registered_at
       FROM students
