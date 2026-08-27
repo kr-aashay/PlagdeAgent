@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Load all dashboard data
 async function loadDashboardData() {
     try {
-        const response = await fetch('/api/admin/stats');
+        const response = await fetch('/APO/admin/stats');
         if (!response.ok) {
             throw new Error('Failed to fetch admin stats');
         }
@@ -76,7 +76,7 @@ function updateRecentRegistrationsTable(registrations) {
 // Download registered participants Excel
 async function downloadRegistered() {
     try {
-        const response = await fetch('/api/admin/export/registered');
+        const response = await fetch('/APO/admin/export/registered');
         if (!response.ok) {
             throw new Error('Failed to download registered list');
         }
@@ -101,7 +101,7 @@ async function downloadRegistered() {
 // Download unregistered participants Excel
 async function downloadUnregistered() {
     try {
-        const response = await fetch('/api/admin/export/unregistered');
+        const response = await fetch('/APO/admin/export/unregistered');
         if (!response.ok) {
             throw new Error('Failed to download unregistered list');
         }
