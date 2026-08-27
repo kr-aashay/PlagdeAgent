@@ -57,7 +57,7 @@ CREATE TABLE employees (
     
     -- Constraints
     CONSTRAINT check_emp_name_length CHECK (length(trim(name)) >= 2),
-    CONSTRAINT check_employee_id_length CHECK (length(trim(employee_id)) >= 2)
+    CONSTRAINT check_employee_id_length CHECK (length(trim(employee_id)) >= 1)
 );
 
 -- ─── Indexes for Performance ───────────────────────────────────────────────
