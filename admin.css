@@ -217,46 +217,22 @@ body {
     opacity: 0.9;
 }
 
-.auto-refresh-section {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    margin-bottom: 30px;
-}
-
-.refresh-info {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    font-size: 16px;
-    color: #4a5568;
-}
-
-.refresh-icon {
-    font-size: 24px;
-    animation: spin 3s linear infinite;
-}
-
-@keyframes spin {
-    0%, 90% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 .refresh-now-btn {
-    padding: 8px 16px;
+    padding: 12px 24px;
     background: #667eea;
     color: white;
     border: none;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
 }
 
 .refresh-now-btn:hover {
-    background: #5568d3;
+    background: #5568d3 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .table-container {

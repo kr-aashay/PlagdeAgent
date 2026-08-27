@@ -1,12 +1,8 @@
 // Admin Dashboard JavaScript
-let refreshInterval;
-let countdownInterval;
-const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadDashboardData();
-    startAutoRefresh();
 });
 
 // Load all dashboard data
@@ -127,45 +123,9 @@ async function downloadUnregistered() {
     }
 }
 
-// Start auto-refresh timer
-function startAutoRefresh() {
-    let remainingTime = REFRESH_INTERVAL_MS;
-    
-    // Clear existing intervals
-    if (refreshInterval) clearInterval(refreshInterval);
-    if (countdownInterval) clearInterval(countdownInterval);
-    
-    // Set main refresh interval
-    refreshInterval = setInterval(() => {
-        loadDashboardData();
-        remainingTime = REFRESH_INTERVAL_MS;
-    }, REFRESH_INTERVAL_MS);
-    
-    // Update countdown every second
-    countdownInterval = setInterval(() => {
-        remainingTime -= 1000;
-        if (remainingTime <= 0) remainingTime = REFRESH_INTERVAL_MS;
-        updateCountdownDisplay(remainingTime);
-    }, 1000);
-    
-    // Initial countdown display
-    updateCountdownDisplay(remainingTime);
-}
-
-// Update countdown timer display
-function updateCountdownDisplay(milliseconds) {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    
-    const display = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    document.getElementById('refreshTimer').textContent = display;
-}
-
 // Manual refresh
 function refreshNow() {
     loadDashboardData();
-    startAutoRefresh(); // Reset timer
     showSuccess('Dashboard refreshed');
 }
 
