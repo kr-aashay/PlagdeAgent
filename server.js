@@ -184,8 +184,8 @@ app.use(express.json({ limit: "1mb" }));
 // CORS — allow requests from any frontend origin (IP or domain)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-key");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });

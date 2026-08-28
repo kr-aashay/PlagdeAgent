@@ -150,7 +150,13 @@ async function handleLoginSubmit(event) {
             body: JSON.stringify({ password })
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (jsonErr) {
+            throw new Error(`Server returned HTTP ${res.status} (${res.statusText || 'HTML error'}). Node server might still be restarting.`);
+        }
 
         if (!res.ok || !data.ok) {
             throw new Error(data.error || 'Invalid admin password.');
