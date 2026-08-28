@@ -41,11 +41,11 @@ function logTest(testName, passed, details = "") {
   }
 }
 
-async function makeRequest(method, endpoint, body = null) {
+async function makeRequest(method, endpoint, body = null, customHeaders = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const options = {
     method,
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json", ...customHeaders }
   };
   
   if (body) {
@@ -191,16 +191,27 @@ async function testPledgeComplete(participantId) {
 }
 
 async function testGetParticipants() {
-  log("\n📋 Testing Get Participants (Admin)...", colors.blue);
+  log("\n📋 Testing Get Participants & Admin Authentication...", colors.blue);
   
-  const { status, data, error } = await makeRequest("GET", "/participants");
+  // Test unauthenticated access (should be rejected 401)
+  const unauth = await makeRequest("GET", "/participants");
+  logTest("Rejects unauthenticated access to /participants", unauth.status === 401);
+
+  // Test admin login
+  const loginRes = await makeRequest("POST", "/admin/login", { password: "mad@296467" });
+  logTest("Admin login succeeds with password", loginRes.status === 200 && loginRes.data?.ok === true);
+  const token = loginRes.data?.token;
+
+  const { status, data, error } = await makeRequest("GET", "/participants", null, {
+    "Authorization": `Bearer ${token}`
+  });
   
   if (error) {
-    logTest("Get participants", false, `Error: ${error}`);
+    logTest("Get participants with auth", false, `Error: ${error}`);
     return;
   }
   
-  logTest("Get participants responds", status === 200);
+  logTest("Get participants responds with auth", status === 200);
   logTest("Response returns ok: true", data.ok === true);
   logTest("Response includes count", typeof data.count === "number", `Count: ${data.count}`);
   logTest("Response includes records array", Array.isArray(data.records));
@@ -213,6 +224,12 @@ async function testGetParticipants() {
     const employees = data.records.filter(r => r.type === "employee").length;
     log(`   👨‍🎓 Students: ${students} | 👔 Employees: ${employees}`, colors.cyan);
   }
+
+  // Test admin members search
+  const membersRes = await makeRequest("GET", "/admin/members?limit=5", null, {
+    "Authorization": `Bearer ${token}`
+  });
+  logTest("Admin members search responds", membersRes.status === 200 && membersRes.data?.ok === true);
 }
 
 async function testValidation() {

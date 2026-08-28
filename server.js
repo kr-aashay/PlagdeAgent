@@ -19,10 +19,59 @@ const express = require("express");
 const path    = require("path");
 const { Pool } = require("pg");
 const XLSX = require("xlsx");
+const crypto = require("crypto");
 
 const app     = express();
 const PORT    = process.env.PORT     || 6003;
 const API_PATH = process.env.API_PATH || "/APO";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "mad@296467";
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "ai_pledge_admin_secret_key_296467";
+
+// Helper to generate HMAC signed admin token
+function generateAdminToken() {
+  const timestamp = Date.now();
+  const signature = crypto.createHmac("sha256", ADMIN_SECRET)
+    .update(`admin:${timestamp}:${ADMIN_PASSWORD}`)
+    .digest("hex");
+  return `${timestamp}.${signature}`;
+}
+
+// Helper to verify auth token or password
+function isValidAdminAuth(provided) {
+  if (!provided) return false;
+  if (provided === ADMIN_PASSWORD) return true;
+  
+  const parts = String(provided).split(".");
+  if (parts.length === 2) {
+    const [timestamp, signature] = parts;
+    const ts = parseInt(timestamp, 10);
+    // Valid for 7 days
+    if (isNaN(ts) || Date.now() - ts > 7 * 24 * 60 * 60 * 1000) return false;
+    const expected = crypto.createHmac("sha256", ADMIN_SECRET)
+      .update(`admin:${timestamp}:${ADMIN_PASSWORD}`)
+      .digest("hex");
+    return signature === expected;
+  }
+  return false;
+}
+
+// Admin authentication middleware
+function requireAdminAuth(req, res, next) {
+  const authHeader = req.headers["authorization"] || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const customKey = req.headers["x-admin-key"] || "";
+  const queryKey = req.query.token || req.query.key || "";
+
+  const candidate = bearerToken || customKey || queryKey;
+  if (isValidAdminAuth(candidate)) {
+    return next();
+  }
+  return res.status(401).json({
+    ok: false,
+    error: "Unauthorized",
+    message: "Admin authentication required. Please provide a valid password or token."
+  });
+}
 
 /* ─── PostgreSQL Connection Pools ──────────────────────────────────────────── */
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -459,8 +508,29 @@ api.post("/track-download", async (req, res) => {
   }
 });
 
+// ─── Admin Authentication Routes ────────────────────────────────────────────
+api.post("/admin/login", (req, res) => {
+  const { password } = req.body || {};
+  if (!password) {
+    return res.status(400).json({ ok: false, error: "Password is required." });
+  }
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ ok: false, error: "Invalid admin password." });
+  }
+  const token = generateAdminToken();
+  return res.json({ 
+    ok: true, 
+    token, 
+    message: "Admin authentication successful." 
+  });
+});
+
+api.get("/admin/verify", requireAdminAuth, (req, res) => {
+  return res.json({ ok: true, message: "Token is valid." });
+});
+
 // GET /APO/participants  (admin)
-api.get("/participants", async (req, res) => {
+api.get("/participants", requireAdminAuth, async (req, res) => {
   try {
     const queries = [`
       SELECT 
@@ -524,7 +594,7 @@ api.get("/participants", async (req, res) => {
 });
 
 // GET /APO/admin/stats - Admin dashboard statistics
-api.get("/admin/stats", async (req, res) => {
+api.get("/admin/stats", requireAdminAuth, async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 
@@ -563,7 +633,8 @@ api.get("/admin/stats", async (req, res) => {
         registerno as id_number,
         branchname as department,
         oath_taken,
-        registered_at
+        registered_at,
+        pledge_taken_at
       FROM students
       WHERE oath_taken = true
       `
@@ -579,14 +650,15 @@ api.get("/admin/stats", async (req, res) => {
         employee_id as id_number,
         department,
         oath_taken,
-        registered_at
+        registered_at,
+        pledge_taken_at
       FROM employees
       WHERE oath_taken = true
       `);
     }
 
     const recentResult = await mainPool.query(`${recentQueries.join("\n")}
-      ORDER BY registered_at DESC
+      ORDER BY pledge_taken_at DESC NULLS LAST, registered_at DESC
       LIMIT 10
     `);
     
@@ -605,11 +677,12 @@ api.get("/admin/stats", async (req, res) => {
       },
       recentRegistrations: recentResult.rows.map(row => ({
         type: row.type,
-        id: row.id_number,
+        id: row.id,
+        identifier: row.id_number,
         name: row.name,
         department: row.department,
         oath_taken: row.oath_taken,
-        registered_at: row.registered_at
+        registered_at: row.pledge_taken_at || row.registered_at
       }))
     });
     
@@ -622,8 +695,233 @@ api.get("/admin/stats", async (req, res) => {
   }
 });
 
+// GET /APO/admin/members - Search, filter, and paginate members
+api.get("/admin/members", requireAdminAuth, async (req, res) => {
+  try {
+    const search = (req.query.q || req.query.search || "").trim();
+    const typeFilter = (req.query.type || "all").toLowerCase();
+    const statusFilter = (req.query.status || "all").toLowerCase();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(5, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const queries = [];
+    const params = [];
+    let paramIndex = 1;
+
+    let studentConds = ["1=1"];
+    let employeeConds = ["1=1"];
+
+    if (search) {
+      params.push(`%${search}%`);
+      studentConds.push(`(name ILIKE $${paramIndex} OR registerno ILIKE $${paramIndex} OR branchname ILIKE $${paramIndex} OR branch_shortname ILIKE $${paramIndex} OR vuid ILIKE $${paramIndex})`);
+      employeeConds.push(`(name ILIKE $${paramIndex} OR employee_id ILIKE $${paramIndex} OR department ILIKE $${paramIndex})`);
+      paramIndex++;
+    }
+
+    if (statusFilter === "completed") {
+      studentConds.push("oath_taken = true");
+      employeeConds.push("oath_taken = true");
+    } else if (statusFilter === "pending") {
+      studentConds.push("(oath_taken = false OR oath_taken IS NULL)");
+      employeeConds.push("(oath_taken = false OR oath_taken IS NULL)");
+    }
+
+    if (typeFilter === "all" || typeFilter === "student") {
+      queries.push(`
+        SELECT 
+          'student' as type,
+          id,
+          name,
+          registerno as identifier,
+          branchname as department,
+          branch_shortname,
+          vuid,
+          coursename,
+          cyear,
+          sectioncode,
+          oath_taken,
+          archetype,
+          total_retries,
+          registered_at,
+          pledge_taken_at,
+          certificate_downloaded,
+          badge_downloaded
+        FROM students
+        WHERE ${studentConds.join(" AND ")}
+      `);
+    }
+
+    if ((typeFilter === "all" || typeFilter === "employee") && (await tableExists("employees"))) {
+      queries.push(`
+        SELECT 
+          'employee' as type,
+          id,
+          name,
+          employee_id as identifier,
+          department,
+          NULL as branch_shortname,
+          NULL as vuid,
+          NULL as coursename,
+          NULL as cyear,
+          NULL as sectioncode,
+          oath_taken,
+          archetype,
+          total_retries,
+          registered_at,
+          pledge_taken_at,
+          certificate_downloaded,
+          badge_downloaded
+        FROM employees
+        WHERE ${employeeConds.join(" AND ")}
+      `);
+    }
+
+    if (queries.length === 0) {
+      return res.json({ ok: true, members: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    }
+
+    const combinedSql = queries.join("\n UNION ALL \n");
+    
+    // Count total matching
+    const countResult = await mainPool.query(
+      `SELECT COUNT(*) as total FROM (${combinedSql}) AS subquery`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].total, 10);
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch paginated data
+    const queryParams = [...params, limit, offset];
+    const dataResult = await mainPool.query(
+      `SELECT * FROM (${combinedSql}) AS subquery 
+       ORDER BY 
+         CASE WHEN oath_taken = true THEN 0 ELSE 1 END,
+         pledge_taken_at DESC NULLS LAST,
+         registered_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      queryParams
+    );
+
+    return res.json({
+      ok: true,
+      members: dataResult.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages
+      }
+    });
+  } catch (err) {
+    console.error("Admin members fetch error:", err.message);
+    return res.status(500).json({ ok: false, error: "Database error fetching members." });
+  }
+});
+
+// POST /APO/admin/members/retake - Reset oath status to allow taking the pledge again
+api.post("/admin/members/retake", requireAdminAuth, async (req, res) => {
+  try {
+    const { type, id, identifier } = req.body || {};
+    if (!type || (!id && !identifier)) {
+      return res.status(400).json({ ok: false, error: "Type and id/identifier are required." });
+    }
+    if (!["student", "employee"].includes(type)) {
+      return res.status(400).json({ ok: false, error: "Invalid member type." });
+    }
+
+    let result;
+    if (type === "student") {
+      const whereClause = id ? "id = $1" : "registerno = $1";
+      const val = id || identifier.trim().toUpperCase();
+      result = await mainPool.query(
+        `UPDATE students
+         SET oath_taken = false,
+             pledge_taken_at = NULL,
+             archetype = NULL,
+             total_retries = 0,
+             certificate_downloaded = false,
+             badge_downloaded = false,
+             certificate_downloaded_at = NULL,
+             badge_downloaded_at = NULL
+         WHERE ${whereClause}
+         RETURNING id, name, registerno as identifier, oath_taken`,
+        [val]
+      );
+    } else {
+      const whereClause = id ? "id = $1" : "employee_id = $1";
+      const val = id || identifier.trim().toUpperCase();
+      result = await mainPool.query(
+        `UPDATE employees
+         SET oath_taken = false,
+             pledge_taken_at = NULL,
+             archetype = NULL,
+             total_retries = 0,
+             certificate_downloaded = false,
+             badge_downloaded = false,
+             certificate_downloaded_at = NULL,
+             badge_downloaded_at = NULL
+         WHERE ${whereClause}
+         RETURNING id, name, employee_id as identifier, oath_taken`,
+        [val]
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Member not found." });
+    }
+
+    const member = result.rows[0];
+    return res.json({
+      ok: true,
+      message: `Oath reset for ${member.name} (${member.identifier}). They can now retake the assessment.`,
+      member
+    });
+  } catch (err) {
+    console.error("Admin reset oath error:", err.message);
+    return res.status(500).json({ ok: false, error: "Database error resetting oath." });
+  }
+});
+
+// DELETE /APO/admin/members/:type/:id - Delete a member entirely
+api.delete("/admin/members/:type/:id", requireAdminAuth, async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    if (!["student", "employee"].includes(type) || !id) {
+      return res.status(400).json({ ok: false, error: "Invalid member type or id." });
+    }
+
+    let result;
+    if (type === "student") {
+      result = await mainPool.query(
+        "DELETE FROM students WHERE id = $1 RETURNING id, name, registerno as identifier",
+        [id]
+      );
+    } else {
+      result = await mainPool.query(
+        "DELETE FROM employees WHERE id = $1 RETURNING id, name, employee_id as identifier",
+        [id]
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Member not found." });
+    }
+
+    const member = result.rows[0];
+    return res.json({
+      ok: true,
+      message: `Member ${member.name} (${member.identifier}) deleted successfully.`,
+      member
+    });
+  } catch (err) {
+    console.error("Admin delete member error:", err.message);
+    return res.status(500).json({ ok: false, error: "Database error deleting member." });
+  }
+});
+
 // GET /APO/admin/export/registered - Export registered students to Excel
-api.get("/admin/export/registered", async (req, res) => {
+api.get("/admin/export/registered", requireAdminAuth, async (req, res) => {
   try {
     // Fetch all registered students with new attributes
     const result = await mainPool.query(`
@@ -671,7 +969,7 @@ api.get("/admin/export/registered", async (req, res) => {
 });
 
 // GET /APO/admin/export/unregistered - Export unregistered students to Excel
-api.get("/admin/export/unregistered", async (req, res) => {
+api.get("/admin/export/unregistered", requireAdminAuth, async (req, res) => {
   try {
     // Fetch all unregistered students with new attributes
     const result = await mainPool.query(`
