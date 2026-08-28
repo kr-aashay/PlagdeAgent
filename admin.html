@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Admin Dashboard - AI Ethics Pledge</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>🔐 AI Ethics Pledge - Admin Dashboard</h1>
+            <div class="last-updated">
+                Last updated: <span id="lastUpdated">Loading...</span>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card registered">
+                <div class="stat-icon">✅</div>
+                <div class="stat-content">
+                    <div class="stat-label">Registered</div>
+                    <div class="stat-value" id="registeredCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card unregistered">
+                <div class="stat-icon">⏳</div>
+                <div class="stat-content">
+                    <div class="stat-label">Unregistered</div>
+                    <div class="stat-value" id="unregisteredCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card total">
+                <div class="stat-icon">👥</div>
+                <div class="stat-content">
+                    <div class="stat-label">Total Expected</div>
+                    <div class="stat-value" id="totalCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card completion">
+                <div class="stat-icon">📊</div>
+                <div class="stat-content">
+                    <div class="stat-label">Completion Rate</div>
+                    <div class="stat-value" id="completionRate">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="breakdown-section">
+            <h2>Registration Breakdown</h2>
+            <div class="breakdown-grid">
+                <div class="breakdown-card">
+                    <h3>Students</h3>
+                    <div class="breakdown-stats">
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Registered:</span>
+                            <span class="breakdown-value" id="studentsRegistered">-</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Unregistered:</span>
+                            <span class="breakdown-value" id="studentsUnregistered">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="breakdown-card">
+                    <h3>Employees</h3>
+                    <div class="breakdown-stats">
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Registered:</span>
+                            <span class="breakdown-value" id="employeesRegistered">-</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Unregistered:</span>
+                            <span class="breakdown-value" id="employeesUnregistered">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-section">
+            <h2>Export Reports</h2>
+            <div class="actions-grid">
+                <button class="export-btn registered-btn" onclick="downloadRegistered()">
+                    <span class="btn-icon">📥</span>
+                    <span class="btn-text">
+                        <strong>Download Registered List</strong>
+                        <small>Excel file with all registered participants</small>
+                    </span>
+                </button>
+
+                <button class="export-btn unregistered-btn" onclick="downloadUnregistered()">
+                    <span class="btn-icon">📥</span>
+                    <span class="btn-text">
+                        <strong>Download Unregistered List</strong>
+                        <small>Excel file with participants who haven't registered</small>
+                    </span>
+                </button>
+            </div>
+            
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <small style="color: #718096;">
+                    💡 <strong>Keyboard shortcuts:</strong> 
+                    Ctrl+R (Refresh) • Ctrl+D (Download Registered) • Ctrl+U (Download Unregistered)
+                </small>
+            </div>
+        </div>
+
+        <div class="actions-section" style="margin-bottom: 20px;">
+            <h2>Dashboard Controls</h2>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <button class="refresh-now-btn" onclick="refreshNow()">
+                    🔄 Refresh Dashboard
+                </button>
+                
+                <button id="autoRefreshBtn" class="auto-refresh-btn" onclick="toggleAutoRefresh()">
+                    🔄 Enable Auto-refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="recent-registrations">
+            <h2>Recent Registrations (Last 10)</h2>
+            <div class="table-container">
+                <table class="registrations-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Registered At</th>
+                            <th>Oath Taken</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentRegistrations">
+                        <tr>
+                            <td colspan="6" class="loading">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

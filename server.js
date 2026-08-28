@@ -18,6 +18,7 @@ require("dotenv").config();
 const express = require("express");
 const path    = require("path");
 const { Pool } = require("pg");
+const XLSX = require("xlsx");
 
 const app     = express();
 const PORT    = process.env.PORT     || 6003;
@@ -56,6 +57,14 @@ if (EXISTING_DB_URL) {
 }
 
 let dbReady = false;
+
+async function tableExists(tableName) {
+  const result = await mainPool.query(
+    "SELECT to_regclass($1) IS NOT NULL AS exists",
+    [`public.${tableName}`]
+  );
+  return result.rows[0].exists;
+}
 
 // Test main database connection
 mainPool.query("SELECT NOW()")
@@ -164,7 +173,8 @@ api.post("/register", async (req, res) => {
     });
   }
   
-  if (identifier.trim().length < 2) {
+  const minLength = type === "student" ? 2 : 1;
+  if (identifier.trim().length < minLength) {
     return res.status(400).json({ 
       ok: false, 
       error: "ID is too short." 
@@ -189,7 +199,7 @@ api.post("/register", async (req, res) => {
     let existingUser;
     if (type === "student") {
       const result = await mainPool.query(
-        `SELECT id, name, department, oath_taken, pledge_taken_at FROM students WHERE registration_no = $1`,
+        `SELECT id, name, branchname as department, oath_taken, pledge_taken_at FROM students WHERE registerno = $1`,
         [cleanIdentifier]
       );
       existingUser = result.rows[0];
@@ -212,7 +222,7 @@ api.post("/register", async (req, res) => {
         
         if (type === "student") {
           result = await mainPool.query(
-            `INSERT INTO students (name, registration_no, department) VALUES ($1, $2, $3) RETURNING id`,
+            `INSERT INTO students (name, registerno, branchname) VALUES ($1, $2, $3) RETURNING id`,
             [dummyName, cleanIdentifier, testDept]
           );
         } else {
@@ -318,7 +328,7 @@ api.post("/pledge-complete", async (req, res) => {
              total_retries = $2, 
              pledge_taken_at = CURRENT_TIMESTAMP
          WHERE id = $3
-         RETURNING id, name, registration_no as identifier, department, 
+         RETURNING id, name, registerno as identifier, branchname as department, 
                    oath_taken, archetype, total_retries, pledge_taken_at,
                    certificate_downloaded, badge_downloaded`,
         [archetype || "", Number(totalRetries) || 0, id]
@@ -452,14 +462,13 @@ api.post("/track-download", async (req, res) => {
 // GET /APO/participants  (admin)
 api.get("/participants", async (req, res) => {
   try {
-    // Union query to fetch from both students and employees tables
-    const result = await mainPool.query(`
+    const queries = [`
       SELECT 
         'student' as type,
         id,
         name,
-        registration_no as identifier,
-        department,
+        registerno as identifier,
+        branchname as department,
         oath_taken,
         archetype,
         total_retries,
@@ -470,10 +479,13 @@ api.get("/participants", async (req, res) => {
         badge_downloaded,
         badge_downloaded_at
       FROM students
-      
+      `
+    ];
+
+    if (await tableExists("employees")) {
+      queries.push(`
       UNION ALL
-      
-      SELECT 
+      SELECT
         'employee' as type,
         id,
         name,
@@ -489,7 +501,10 @@ api.get("/participants", async (req, res) => {
         badge_downloaded,
         badge_downloaded_at
       FROM employees
-      
+      `);
+    }
+
+    const result = await mainPool.query(`${queries.join("\n")}
       ORDER BY registered_at DESC
     `);
     
@@ -504,6 +519,196 @@ api.get("/participants", async (req, res) => {
     return res.status(500).json({ 
       ok: false, 
       error: "Database error." 
+    });
+  }
+});
+
+// GET /APO/admin/stats - Admin dashboard statistics
+api.get("/admin/stats", async (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+
+    // Get counts from both tables
+    const studentsResult = await mainPool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM students
+    `);
+    
+    const employeesResult = (await tableExists("employees"))
+      ? await mainPool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM employees
+    `)
+      : { rows: [{ total: 0, registered: 0 }] };
+    
+    const studentsTotal = parseInt(studentsResult.rows[0].total);
+    const studentsRegistered = parseInt(studentsResult.rows[0].registered);
+    const employeesTotal = parseInt(employeesResult.rows[0].total);
+    const employeesRegistered = parseInt(employeesResult.rows[0].registered);
+    
+    const totalRegistered = studentsRegistered + employeesRegistered;
+    const totalExpected = studentsTotal + employeesTotal;
+    const totalUnregistered = totalExpected - totalRegistered;
+    
+    // Get recent registrations (last 10)
+    const recentQueries = [`
+      SELECT 
+        'student' as type,
+        id,
+        name,
+        registerno as id_number,
+        branchname as department,
+        oath_taken,
+        registered_at
+      FROM students
+      WHERE oath_taken = true
+      `
+    ];
+
+    if (await tableExists("employees")) {
+      recentQueries.push(`
+      UNION ALL
+      SELECT
+        'employee' as type,
+        id,
+        name,
+        employee_id as id_number,
+        department,
+        oath_taken,
+        registered_at
+      FROM employees
+      WHERE oath_taken = true
+      `);
+    }
+
+    const recentResult = await mainPool.query(`${recentQueries.join("\n")}
+      ORDER BY registered_at DESC
+      LIMIT 10
+    `);
+    
+    return res.json({
+      ok: true,
+      total: totalExpected,
+      registered: {
+        total: totalRegistered,
+        students: studentsRegistered,
+        employees: employeesRegistered
+      },
+      unregistered: {
+        total: totalUnregistered,
+        students: studentsTotal - studentsRegistered,
+        employees: employeesTotal - employeesRegistered
+      },
+      recentRegistrations: recentResult.rows.map(row => ({
+        type: row.type,
+        id: row.id_number,
+        name: row.name,
+        department: row.department,
+        oath_taken: row.oath_taken,
+        registered_at: row.registered_at
+      }))
+    });
+    
+  } catch (err) {
+    console.error("Admin stats error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Database error." 
+    });
+  }
+});
+
+// GET /APO/admin/export/registered - Export registered students to Excel
+api.get("/admin/export/registered", async (req, res) => {
+  try {
+    // Fetch all registered students with new attributes
+    const result = await mainPool.query(`
+      SELECT 
+        registerno as "Register No",
+        name as "Name",
+        vuid as "VU ID",
+        coursename as "Program Name",
+        branch_shortname as "Branch Short Name",
+        branchname as "Branch Name",
+        cyear as "Year",
+        sectioncode as "Section",
+        archetype as "Archetype",
+        total_retries as "Total Retries",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Registered At",
+        TO_CHAR(pledge_taken_at, 'YYYY-MM-DD HH24:MI:SS') as "Pledge Taken At",
+        CASE WHEN certificate_downloaded THEN 'Yes' ELSE 'No' END as "Certificate Downloaded",
+        CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
+      FROM students
+      WHERE oath_taken = true
+      ORDER BY pledge_taken_at DESC
+    `);
+    
+    // Create Excel workbook
+    const worksheet = XLSX.utils.json_to_sheet(result.rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Registered");
+    
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=registered_${Date.now()}.xlsx`);
+    
+    return res.send(excelBuffer);
+    
+  } catch (err) {
+    console.error("Export registered error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Export failed." 
+    });
+  }
+});
+
+// GET /APO/admin/export/unregistered - Export unregistered students to Excel
+api.get("/admin/export/unregistered", async (req, res) => {
+  try {
+    // Fetch all unregistered students with new attributes
+    const result = await mainPool.query(`
+      SELECT 
+        registerno as "Register No",
+        name as "Name",
+        vuid as "VU ID",
+        coursename as "Program Name",
+        branch_shortname as "Branch Short Name",
+        branchname as "Branch Name",
+        cyear as "Year",
+        sectioncode as "Section",
+        TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
+      FROM students
+      WHERE oath_taken = false OR oath_taken IS NULL
+      ORDER BY name ASC
+    `);
+    
+    // Create Excel workbook
+    const worksheet = XLSX.utils.json_to_sheet(result.rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Unregistered");
+    
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=unregistered_${Date.now()}.xlsx`);
+    
+    return res.send(excelBuffer);
+    
+  } catch (err) {
+    console.error("Export unregistered error:", err.message);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Export failed." 
     });
   }
 });
@@ -524,6 +729,19 @@ app.use((req, res, next) => {
     res.setHeader('Expires', '0');
   }
   next();
+});
+
+// Admin page routes — /oath/admin1 is the primary URL
+app.get(["/oath/admin1", "/oath/admin1.html", "/admin1", "/oath.admin1"], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+// Legacy: redirect old /oath/admin URLs to /oath/admin1
+app.get(["/oath/admin", "/oath/admin.html", "/admin", "/oath.admin"], (req, res) => {
+  res.redirect(301, "/oath/admin1");
 });
 
 app.use("/oath", express.static(STATIC_DIR));
@@ -547,12 +765,19 @@ process.on("SIGINT", async () => {
 /* ─── Start ────────────────────────────────────────────────────────────────── */
 app.listen(PORT, () => {
   console.log(`\n✅  AI Ethics Pledge`);
-  console.log(`    Local:     http://localhost:${PORT}`);
-  console.log(`    Frontend:  https://vucse.app/oath`);
-  console.log(`    API:       https://vucse.app${API_PATH}`);
-  console.log(`    Database:  ${DATABASE_URL.replace(/:([^@/]+)@/, ":****@")}`);
+  console.log(`    Local:          http://localhost:${PORT}`);
+  console.log(`    Frontend:       https://vucse.app/oath`);
+  console.log(`    API:            https://vucse.app${API_PATH}`);
+  console.log(`    Database:       ${DATABASE_URL.replace(/:([^@/]+)@/, ":****@")}`);
   if (EXISTING_DB_URL) {
-    console.log(`    Lookup DB: ${EXISTING_DB_URL.replace(/:([^@/]+)@/, ":****@")}`);
+    console.log(`    Lookup DB:      ${EXISTING_DB_URL.replace(/:([^@/]+)@/, ":****@")}`);
   }
+  console.log();
+  console.log(`✅  Admin Dashboard`);
+  console.log(`    Local:          http://localhost:${PORT}/oath/admin1`);
+  console.log(`    Production:     https://vucse.app/oath/admin1`);
+  console.log(`    Admin API:      https://vucse.app${API_PATH}/admin`);
+  console.log(`    Shortcut:       https://vucse.app/admin1  →  /oath/admin1`);
+  console.log(`    Legacy:         https://vucse.app/oath/admin  →  /oath/admin1`);
   console.log();
 });

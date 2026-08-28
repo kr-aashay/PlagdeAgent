@@ -230,12 +230,19 @@ async function testValidation() {
   });
   logTest("Rejects invalid type", invalidType.status === 400);
   
-  // Short identifier
+  // Short identifier for student (should be rejected)
   const shortId = await makeRequest("POST", "/register", {
     type: "student",
     identifier: "A"
   });
-  logTest("Rejects short identifier", shortId.status === 400);
+  logTest("Rejects short student identifier", shortId.status === 400);
+
+  // Short identifier for employee (should be allowed, returning 404 as not registered rather than 400 too short)
+  const shortEmpId = await makeRequest("POST", "/register", {
+    type: "employee",
+    identifier: "E"
+  });
+  logTest("Allows short employee identifier", shortEmpId.status === 404);
 }
 
 async function runAllTests() {

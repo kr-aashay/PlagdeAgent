@@ -790,8 +790,12 @@ _certImg.src   = "/oath/assets/certificate-template.png";
 // onload/onerror handled silently — render functions check naturalWidth
 
 // ─── Helper: Draw Name on Badge (Complex Layout) ──────────────────────────────
-function drawNameOnBadge(canvas, ctx, result) {
+function drawNameOnBadge(canvas, ctx, result, baseWidth, baseHeight) {
   ctx.save();
+  
+  // Use base dimensions for calculations, not scaled canvas dimensions
+  const actualWidth = baseWidth || canvas.width;
+  const actualHeight = baseHeight || canvas.height;
 
   function getLines(text, maxW, font) {
     ctx.font = font;
@@ -811,12 +815,12 @@ function drawNameOnBadge(canvas, ctx, result) {
     return lines;
   }
 
-  const maxW = canvas.width * 0.65;
-  const maxFSize = Math.round(canvas.width * (35 / 420));
+  const maxW = actualWidth * 0.65;
+  const maxFSize = Math.round(actualWidth * (35 / 420));
   let fSize = maxFSize;
   let lines = [result.name];
 
-  // Try single line layout first
+  // Try single line layout first with enhanced quality
   let singleFit = false;
   let singleFSize = maxFSize;
   while (singleFSize > 20) {
@@ -825,42 +829,57 @@ function drawNameOnBadge(canvas, ctx, result) {
       singleFit = true;
       break;
     }
-    singleFSize -= 2;
+    singleFSize -= 1; // Smaller decrements for better fitting
   }
 
-  const minSingleThreshold = Math.round(canvas.width * (20 / 420));
+  const minSingleThreshold = Math.round(actualWidth * (20 / 420));
   if (singleFit && singleFSize >= minSingleThreshold) {
     fSize = singleFSize;
     lines = [result.name];
   } else {
-    fSize = Math.round(canvas.width * 0.08);
+    fSize = Math.round(actualWidth * 0.08);
     while (fSize > 20) {
       const font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
       const attempt = getLines(result.name, maxW, font);
+      
+      ctx.font = font;
       const allFit = attempt.every(line => ctx.measureText(line).width <= maxW);
 
       if (attempt.length <= 2 && allFit) {
         lines = attempt;
         break;
       }
-      fSize -= 2;
+      fSize -= 1; // Smaller decrements for better fitting
     }
 
-    if (lines.length > 1 && fSize > Math.round(canvas.width * 0.045)) {
-      fSize = Math.round(canvas.width * 0.045);
+    if (lines.length > 1 && fSize > Math.round(actualWidth * 0.045)) {
+      fSize = Math.round(actualWidth * 0.045);
     }
   }
 
-  ctx.font      = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
+  // Enhanced text rendering
+  ctx.font = `bold ${fSize}px 'Poppins', 'Segoe UI', Arial, sans-serif`;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  
+  // Add subtle shadow for better text definition
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+  ctx.shadowBlur = 2;
 
-  const centreY    = canvas.height * 0.48;
+  const centreY = actualHeight * 0.48;
   const lineHeight = fSize * 1.25;
 
   const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
-  lines.forEach((ln, i) => ctx.fillText(ln, canvas.width / 2, startY + i * lineHeight));
+  lines.forEach((ln, i) => ctx.fillText(ln, actualWidth / 2, startY + i * lineHeight));
+
+  // Reset shadow
+  ctx.shadowColor = 'transparent';
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.shadowBlur = 0;
 
   ctx.restore();
 }
@@ -927,7 +946,7 @@ function renderBadgePreview(result, onComplete) {
     canvas.width  = _badgeImg.naturalWidth  || 3375;
     canvas.height = _badgeImg.naturalHeight || 3375;
     ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
-    drawNameOnBadge(canvas, ctx, result);
+    drawNameOnBadge(canvas, ctx, result, canvas.width, canvas.height);
     drawComplete();
   } else if (_badgeImg.complete && _badgeImg.naturalWidth === 0) {
     canvas.width  = 800;
@@ -939,7 +958,7 @@ function renderBadgePreview(result, onComplete) {
       canvas.width  = _badgeImg.naturalWidth  || 3375;
       canvas.height = _badgeImg.naturalHeight || 3375;
       ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
-      drawNameOnBadge(canvas, ctx, result);
+      drawNameOnBadge(canvas, ctx, result, canvas.width, canvas.height);
       drawComplete();
     };
     _badgeImg.onerror = () => {
@@ -956,21 +975,26 @@ async function downloadFile(type) {
   const a = document.createElement("a");
   const safeName = state.userName.replace(/[^a-z0-9]/gi, "-").replace(/-+/g, "-");
   
-  // Use a separate offscreen canvas for download rendering so the on-screen preview is never affected or resized
+  // Use a separate high-resolution offscreen canvas for download rendering
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   
+  // Enable high-quality rendering settings
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  
   if (type === "certificate") {
-    // Render certificate template with just the name
+    // Render certificate template with enhanced quality
     await renderCertificate(canvas, ctx, state.result);
     a.download = `AI-Ethics-Certificate-${safeName}.png`;
   } else {
-    // Render badge template with full design
+    // Render badge template with enhanced quality
     await renderBadge(canvas, ctx, state.result);
     a.download = `AI-Ethics-Badge-${safeName}.png`;
   }
   
-  a.href = canvas.toDataURL("image/png");
+  // Use maximum quality PNG export
+  a.href = canvas.toDataURL("image/png", 1.0); // Maximum quality PNG
   a.click();
   
   // Track download in database
@@ -991,40 +1015,88 @@ async function downloadFile(type) {
   }
 }
 
-// ─── Render Certificate (Simple - Just Name) ──────────────────────────────────
+// ─── Render Certificate (Enhanced High-Quality Version) ────────────────────────
 async function renderCertificate(canvas, ctx, result) {
   return new Promise((resolve) => {
     function drawCertificate() {
       if (_certImg.complete && _certImg.naturalWidth > 0) {
-        // Use certificate template
-        canvas.width = _certImg.naturalWidth || 1024;
-        canvas.height = _certImg.naturalHeight || 576;
-        ctx.drawImage(_certImg, 0, 0, canvas.width, canvas.height);
+        // Enhanced high-resolution rendering
+        const baseWidth = _certImg.naturalWidth || 1024;
+        const baseHeight = _certImg.naturalHeight || 576;
         
-        // Add name in the center blank space
+        // Scale up for high-quality rendering (2x or 3x for better quality)
+        const scale = window.devicePixelRatio || 2; // Use device pixel ratio or default to 2x
+        const finalScale = Math.max(scale, 2); // Minimum 2x scaling for quality
+        
+        canvas.width = baseWidth * finalScale;
+        canvas.height = baseHeight * finalScale;
+        
+        // Scale the context to maintain proper drawing coordinates
+        ctx.scale(finalScale, finalScale);
+        
+        // Enable high-quality rendering
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw the certificate template at high resolution
+        ctx.drawImage(_certImg, 0, 0, baseWidth, baseHeight);
+        
+        // Add name in the center blank space with enhanced text rendering
         ctx.save();
         
-        // We use Google Font 'Great Vibes' (cursive script), 'Playfair Display' (serif), falling back to standard Georgia
-        const fontName = "'Times New Roman', serif";
+        // Enhanced font rendering settings
+        const fontName = "'Times New Roman', 'Liberation Serif', 'DejaVu Serif', serif";
         
-        // Scale base font size based on canvas width
-        // A size of 43px (reduced from 48px) is ideal for a 1024px canvas width
-        let fSize = Math.round(canvas.width * (43 / 1024));
-        ctx.font = `italic ${fSize}px ${fontName}`;
-        ctx.fillStyle = "#0b2265"; // Deep blue to match Vignan branding
-        ctx.textAlign = "center";
-        ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
+        // Dynamic font sizing based on name length with better scaling
+        const maxW = baseWidth * 0.65; // More conservative width for better fit
+        const nameLength = result.name.length;
         
-        // Wrap or scale text if it exceeds 65% of the certificate width
-        const maxW = canvas.width * 0.65;
-        while (fSize > 18 && ctx.measureText(result.name).width > maxW) {
-          fSize -= 2;
-          ctx.font = `Times New Roman ${fSize}px ${fontName}`;
+        // Calculate starting font size based on name length with improved scaling
+        let fSize;
+        if (nameLength <= 10) {
+          fSize = 44; // Very short names get larger size
+        } else if (nameLength <= 15) {
+          fSize = 40; // Short names get large size
+        } else if (nameLength <= 25) {
+          fSize = 36; // Medium names
+        } else if (nameLength <= 35) {
+          fSize = 32; // Long names
+        } else if (nameLength <= 45) {
+          fSize = 28; // Very long names
+        } else {
+          fSize = 24; // Extremely long names
         }
         
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height * (302 / 576); // Baseline matches name placement coordinate just above y=307 line
+        ctx.fillStyle = "#0b2265"; // Deep blue to match Vignan branding
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        
+        // Set initial font with better rendering
+        ctx.font = `italic ${fSize}px ${fontName}`;
+        
+        // More precise text fitting algorithm
+        while (fSize > 18 && ctx.measureText(result.name).width > maxW) {
+          fSize -= 0.5; // Smaller decrements for better fitting
+          ctx.font = `italic ${fSize}px ${fontName}`;
+        }
+        
+        // Enhanced text rendering with shadow for better definition
+        ctx.shadowColor = 'rgba(11, 34, 101, 0.1)';
+        ctx.shadowOffsetX = 0.5;
+        ctx.shadowOffsetY = 0.5;
+        ctx.shadowBlur = 1;
+        
+        const centerX = baseWidth / 2;
+        const centerY = baseHeight * (295 / 576); // Position name higher above the line
+        
+        // Draw text with enhanced quality
         ctx.fillText(result.name, centerX, centerY);
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.shadowBlur = 0;
         
         ctx.restore();
         resolve();
@@ -1034,92 +1106,160 @@ async function renderCertificate(canvas, ctx, result) {
     }
     
     function drawFallback() {
-      // Fallback if certificate template not loaded
-      canvas.width = 1024;
-      canvas.height = 576;
+      // Enhanced fallback if certificate template not loaded
+      const scale = window.devicePixelRatio || 2;
+      const finalScale = Math.max(scale, 2);
       
-      // Background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 1024 * finalScale;
+      canvas.height = 576 * finalScale;
+      ctx.scale(finalScale, finalScale);
       
-      // Borders
+      // Enable high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Background with subtle gradient
+      const gradient = ctx.createLinearGradient(0, 0, 1024, 576);
+      gradient.addColorStop(0, '#ffffff');
+      gradient.addColorStop(1, '#f8fafc');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1024, 576);
+      
+      // Enhanced borders with better styling
       ctx.lineWidth = 15;
       ctx.strokeStyle = "#0b2265";
-      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+      ctx.lineJoin = 'miter';
+      ctx.lineCap = 'square';
+      ctx.strokeRect(10, 10, 1004, 556);
       
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.strokeStyle = "#c9a361"; // Gold
-      ctx.strokeRect(25, 25, canvas.width - 50, canvas.height - 50);
+      ctx.strokeRect(25, 25, 974, 526);
       
-      // Header
+      // Inner decorative line
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.strokeRect(35, 35, 954, 506);
+      
+      // Header with enhanced typography
       ctx.textAlign = "center";
       ctx.fillStyle = "#0b2265";
-      ctx.font = "bold 24px 'Poppins', sans-serif";
-      ctx.fillText("CERTIFICATE OF RESPONSIBLE AND ETHICAL AI OATH", canvas.width / 2, 80);
+      ctx.font = "bold 24px 'Poppins', 'Segoe UI', sans-serif";
+      ctx.fillText("CERTIFICATE OF RESPONSIBLE AND ETHICAL AI OATH", 512, 80);
       
-      // Pill for Commemoration
-      ctx.fillStyle = "#0058b6";
+      // Enhanced pill for Commemoration
       const pillW = 380;
       const pillH = 28;
-      ctx.fillRect((canvas.width - pillW) / 2, 110, pillW, pillH);
+      const pillX = (1024 - pillW) / 2;
+      
+      // Pill with rounded corners effect
+      ctx.fillStyle = "#0058b6";
+      ctx.beginPath();
+      // Manual rounded rectangle since roundRect may not be supported
+      const radius = 14;
+      ctx.moveTo(pillX + radius, 110);
+      ctx.lineTo(pillX + pillW - radius, 110);
+      ctx.quadraticCurveTo(pillX + pillW, 110, pillX + pillW, 110 + radius);
+      ctx.lineTo(pillX + pillW, 110 + pillH - radius);
+      ctx.quadraticCurveTo(pillX + pillW, 110 + pillH, pillX + pillW - radius, 110 + pillH);
+      ctx.lineTo(pillX + radius, 110 + pillH);
+      ctx.quadraticCurveTo(pillX, 110 + pillH, pillX, 110 + pillH - radius);
+      ctx.lineTo(pillX, 110 + radius);
+      ctx.quadraticCurveTo(pillX, 110, pillX + radius, 110);
+      ctx.closePath();
+      ctx.fill();
+      
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 12px 'Poppins', sans-serif";
+      ctx.font = "bold 12px 'Poppins', 'Segoe UI', sans-serif";
       ctx.textBaseline = "middle";
-      ctx.fillText("IN COMMEMORATION OF AGENTIC AI DAY", canvas.width / 2, 124);
+      ctx.fillText("IN COMMEMORATION OF AGENTIC AI DAY", 512, 124);
       
-      // Certify text
-      ctx.fillStyle = "#111111";
-      ctx.font = "italic 16px 'Georgia', serif";
-      ctx.fillText("This is to Certify that", canvas.width / 2, 185);
+      // Certify text with better typography
+      ctx.fillStyle = "#374151";
+      ctx.font = "italic 16px 'Georgia', 'Times New Roman', serif";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("This is to Certify that", 512, 185);
       
-      // Draw Name
+      // Draw Name with enhanced quality
       ctx.save();
-      const fontName = "'Great Vibes', 'Playfair Display', 'Georgia', 'Times New Roman', serif";
-      let fSize = 41; // Reduced from 46px
+      const fontName = "'Times New Roman', 'Liberation Serif', 'DejaVu Serif', serif";
+      
+      // Dynamic font sizing with improved algorithm
+      const nameLength = result.name.length;
+      let fSize;
+      if (nameLength <= 10) {
+        fSize = 44;
+      } else if (nameLength <= 15) {
+        fSize = 40;
+      } else if (nameLength <= 25) {
+        fSize = 36;
+      } else if (nameLength <= 35) {
+        fSize = 32;
+      } else if (nameLength <= 45) {
+        fSize = 28;
+      } else {
+        fSize = 24;
+      }
+      
       ctx.font = `italic ${fSize}px ${fontName}`;
       ctx.fillStyle = "#0b2265";
-      ctx.textBaseline = "alphabetic"; // Rest baseline exactly on the line
-      const maxW = canvas.width * 0.65;
-      while (fSize > 20 && ctx.measureText(result.name).width > maxW) {
-        fSize -= 2;
+      ctx.textBaseline = "alphabetic";
+      
+      const maxW = 1024 * 0.65;
+      
+      // Precise text fitting
+      while (fSize > 18 && ctx.measureText(result.name).width > maxW) {
+        fSize -= 0.5;
         ctx.font = `italic ${fSize}px ${fontName}`;
       }
-      ctx.fillText(result.name, canvas.width / 2, 302); // Draw name baseline at y=302
+      
+      // Enhanced text with subtle shadow
+      ctx.shadowColor = 'rgba(11, 34, 101, 0.1)';
+      ctx.shadowOffsetX = 0.5;
+      ctx.shadowOffsetY = 0.5;
+      ctx.shadowBlur = 1;
+      
+      ctx.fillText(result.name, 512, 295);
+      
+      ctx.shadowColor = 'transparent';
       ctx.restore();
       
-      // Line under name
+      // Enhanced line under name
       ctx.beginPath();
+      ctx.strokeStyle = "#0b2265";
+      ctx.lineWidth = 2;
       ctx.moveTo(300, 307);
       ctx.lineTo(724, 307);
-      ctx.strokeStyle = "#99a0ba";
-      ctx.lineWidth = 1.5;
       ctx.stroke();
       
-      // Description
+      // Additional certificate text with better styling
+      ctx.fillStyle = "#374151";
+      ctx.font = "16px 'Georgia', 'Times New Roman', serif";
+      ctx.textAlign = "center";
+      ctx.fillText("has participated in Ethical and Responsible AI Oath held on", 512, 340);
+      ctx.fillText("the occasion of Agentic AI Day. Organized by the", 512, 365);
+      ctx.fillText("Vignan's Foundation for Science, Technology and Research,", 512, 390);
+      ctx.fillText("on 29, August 2026.", 512, 415);
+      
+      // Motto with enhanced styling
       ctx.fillStyle = "#0b2265";
-      ctx.font = "14px 'Poppins', sans-serif";
-      const desc1 = "has participated in Ethical and Responsible AI Oath held on the occasion of";
-      const desc2 = "Agentic AI Day, Organized by the Vignan's Foundation for Science, Technology and Research,";
-      const desc3 = "on 29, August 2026.";
-      ctx.fillText(desc1, canvas.width / 2, 345);
-      ctx.fillText(desc2, canvas.width / 2, 370);
-      ctx.fillText(desc3, canvas.width / 2, 395);
+      ctx.font = "bold 18px 'Poppins', 'Segoe UI', sans-serif";
+      ctx.fillText("INNOVATE WITH INTELLIGENCE. LEAD WITH RESPONSIBILITY.", 512, 460);
       
-      // Footer text
-      ctx.fillStyle = "#c9a361";
-      ctx.font = "bold 13px 'Poppins', sans-serif";
-      ctx.fillText("INNOVATE WITH INTELLIGENCE. LEAD WITH RESPONSIBILITY.", canvas.width / 2, 435);
-      
-      // Signature
-      ctx.fillStyle = "#111111";
-      ctx.font = "bold 11px 'Poppins', sans-serif";
-      ctx.fillText("Dr. Lavu Rathaiah", canvas.width - 200, 485);
-      ctx.font = "10px 'Poppins', sans-serif";
-      ctx.fillText("Chairman, Vignan Group of Institutions", canvas.width - 200, 500);
+      // Date with better formatting
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "14px 'Poppins', 'Segoe UI', sans-serif";
+      const currentDate = new Date().toLocaleDateString("en-US", { 
+        year: "numeric", 
+        month: "long", 
+        day: "numeric" 
+      });
+      ctx.fillText(`Generated on ${currentDate}`, 512, 520);
       
       resolve();
     }
-    
+
+    // Check if image is loaded
     if (_certImg.complete && _certImg.naturalWidth > 0) {
       drawCertificate();
     } else if (_certImg.complete && _certImg.naturalWidth === 0) {
@@ -1136,15 +1276,36 @@ async function renderBadge(canvas, ctx, result) {
   return new Promise((resolve) => {
     function drawBadge() {
       if (_badgeImg.complete && _badgeImg.naturalWidth > 0) {
-        canvas.width = _badgeImg.naturalWidth || 3375;
-        canvas.height = _badgeImg.naturalHeight || 3375;
-        ctx.drawImage(_badgeImg, 0, 0, canvas.width, canvas.height);
-        drawNameOnBadge(canvas, ctx, result);
+        // Enhanced high-resolution badge rendering
+        const baseWidth = _badgeImg.naturalWidth || 3375;
+        const baseHeight = _badgeImg.naturalHeight || 3375;
+        
+        // Use high resolution for badges too
+        const scale = window.devicePixelRatio || 2;
+        const finalScale = Math.max(scale, 1.5); // Badges are already high-res, so less scaling needed
+        
+        canvas.width = baseWidth * finalScale;
+        canvas.height = baseHeight * finalScale;
+        
+        // Scale context and enable high-quality rendering
+        ctx.scale(finalScale, finalScale);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw badge template at high quality
+        ctx.drawImage(_badgeImg, 0, 0, baseWidth, baseHeight);
+        drawNameOnBadge(canvas, ctx, result, baseWidth, baseHeight);
         resolve();
       } else {
-        // Fallback
-        canvas.width = 800;
-        canvas.height = 800;
+        // Enhanced fallback
+        const scale = window.devicePixelRatio || 2;
+        canvas.width = 800 * scale;
+        canvas.height = 800 * scale;
+        ctx.scale(scale, scale);
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
         drawBadgeFallback(canvas, ctx, result);
         resolve();
       }
