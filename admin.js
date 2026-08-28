@@ -82,6 +82,7 @@ async function checkAuthAndInit() {
 
         if (res.ok) {
             hideLoginModal();
+            mountDashboard();
             loadDashboardData();
             loadMembers(1);
         } else {
@@ -96,9 +97,9 @@ async function checkAuthAndInit() {
 
 function showLoginModal() {
     const modal = document.getElementById('loginModal');
-    const app = document.getElementById('adminApp');
+    const root = document.getElementById('adminRoot');
     if (modal) modal.style.display = 'flex';
-    if (app) app.style.display = 'none';
+    if (root) root.innerHTML = ''; // Wipe dashboard completely from DOM
 
     const pwdInput = document.getElementById('adminPasswordInput');
     if (pwdInput) {
@@ -109,9 +110,7 @@ function showLoginModal() {
 
 function hideLoginModal() {
     const modal = document.getElementById('loginModal');
-    const app = document.getElementById('adminApp');
     if (modal) modal.style.display = 'none';
-    if (app) app.style.display = 'block';
 }
 
 function togglePasswordVisibility() {
@@ -162,9 +161,10 @@ async function handleLoginSubmit(event) {
             throw new Error(data.error || 'Invalid admin password.');
         }
 
-        // Save token and load
+        // Save token, hide login, and mount dynamic dashboard
         setAdminToken(data.token);
         hideLoginModal();
+        mountDashboard();
         showNotification('Signed in as Admin', 'success');
 
         loadDashboardData();
@@ -193,6 +193,243 @@ function logoutAdmin() {
     }
     showLoginModal();
     showNotification('Logged out successfully', 'info');
+}
+
+/* ─── Dynamic Dashboard Mounting ────────────────────────────────────────────── */
+
+function mountDashboard() {
+    const root = document.getElementById('adminRoot');
+    if (!root) return;
+
+    root.innerHTML = `
+    <div class="admin-container" id="adminApp">
+        <header class="admin-header">
+            <div class="header-left">
+                <div class="header-badge">ADMIN CONSOLE</div>
+                <h1>🔐 AI Ethics Pledge Dashboard</h1>
+                <div class="last-updated">
+                    Last updated: <span id="lastUpdated">Loading...</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span class="auth-status-pill">
+                    <span class="pulse-dot"></span> Admin Authenticated
+                </span>
+                <button class="logout-btn" onclick="logoutAdmin()" title="Log out of admin session">
+                    🚪 Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Overview Cards -->
+        <div class="stats-grid">
+            <div class="stat-card registered">
+                <div class="stat-icon">✅</div>
+                <div class="stat-content">
+                    <div class="stat-label">Oath Taken</div>
+                    <div class="stat-value" id="registeredCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card unregistered">
+                <div class="stat-icon">⏳</div>
+                <div class="stat-content">
+                    <div class="stat-label">Pending Oath</div>
+                    <div class="stat-value" id="unregisteredCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card total">
+                <div class="stat-icon">👥</div>
+                <div class="stat-content">
+                    <div class="stat-label">Total On-Roll</div>
+                    <div class="stat-value" id="totalCount">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card completion">
+                <div class="stat-icon">📊</div>
+                <div class="stat-content">
+                    <div class="stat-label">Completion Rate</div>
+                    <div class="stat-value" id="completionRate">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Breakdown Section -->
+        <div class="breakdown-section">
+            <h2>Registration Breakdown</h2>
+            <div class="breakdown-grid">
+                <div class="breakdown-card">
+                    <h3>👨‍🎓 Students</h3>
+                    <div class="breakdown-stats">
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Completed:</span>
+                            <span class="breakdown-value" id="studentsRegistered">-</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Pending:</span>
+                            <span class="breakdown-value" id="studentsUnregistered">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="breakdown-card">
+                    <h3>👨‍💼 Employees</h3>
+                    <div class="breakdown-stats">
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Completed:</span>
+                            <span class="breakdown-value" id="employeesRegistered">-</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">Pending:</span>
+                            <span class="breakdown-value" id="employeesUnregistered">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Reports -->
+        <div class="actions-section">
+            <h2>📥 Export Reports</h2>
+            <div class="actions-grid">
+                <button class="export-btn registered-btn" onclick="downloadRegistered()">
+                    <span class="btn-icon">📑</span>
+                    <span class="btn-text">
+                        <strong>Download Registered List</strong>
+                        <small>Excel sheet with all participants who completed the pledge</small>
+                    </span>
+                </button>
+
+                <button class="export-btn unregistered-btn" onclick="downloadUnregistered()">
+                    <span class="btn-icon">📋</span>
+                    <span class="btn-text">
+                        <strong>Download Unregistered List</strong>
+                        <small>Excel sheet with eligible participants yet to complete</small>
+                    </span>
+                </button>
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                <small style="color: #718096;">
+                    💡 <strong>Shortcuts:</strong> 
+                    Ctrl+R (Refresh) • Ctrl+D (Download Registered) • Ctrl+U (Download Unregistered)
+                </small>
+            </div>
+        </div>
+
+        <!-- Member Management Section -->
+        <div class="management-section">
+            <div class="section-header-wrap">
+                <div>
+                    <h2>👥 Member Management & Oath Control</h2>
+                    <p class="section-desc">Search any student or employee to <strong>reset their oath status (allow retake)</strong> or <strong>delete records</strong>.</p>
+                </div>
+                <button class="btn-secondary" onclick="loadMembers(1)">🔄 Refresh List</button>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="search-filter-bar">
+                <div class="search-input-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input 
+                        type="text" 
+                        id="memberSearchInput" 
+                        placeholder="Search by Reg No, Employee ID, Name, Branch..." 
+                        oninput="onSearchInput(event)"
+                    />
+                    <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch()" style="display: none;">✕</button>
+                </div>
+
+                <div class="filter-controls">
+                    <select id="memberTypeFilter" onchange="onFilterChange()">
+                        <option value="all">All Types</option>
+                        <option value="student">👨‍🎓 Students Only</option>
+                        <option value="employee">👨‍💼 Employees Only</option>
+                    </select>
+
+                    <select id="memberStatusFilter" onchange="onFilterChange()">
+                        <option value="all">All Oath Statuses</option>
+                        <option value="completed">✅ Oath Completed</option>
+                        <option value="pending">⏳ Pending / Not Taken</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Members Data Table -->
+            <div class="table-container">
+                <table class="registrations-table management-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Identifier / Reg No</th>
+                            <th>Name</th>
+                            <th>Department / Branch</th>
+                            <th>Oath Status</th>
+                            <th>Downloads</th>
+                            <th style="text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="membersTableBody">
+                        <tr>
+                            <td colspan="7" class="loading">Loading members data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar" id="paginationBar" style="display: none;">
+                <div class="pagination-info" id="paginationInfo">Showing 0-0 of 0</div>
+                <div class="pagination-buttons">
+                    <button id="prevPageBtn" class="btn-page" onclick="changePage(-1)">← Previous</button>
+                    <span id="pageIndicator" class="page-indicator">Page 1 of 1</span>
+                    <button id="nextPageBtn" class="btn-page" onclick="changePage(1)">Next →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Controls -->
+        <div class="actions-section" style="margin-bottom: 25px;">
+            <h2>⚙️ Dashboard Controls</h2>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <button class="refresh-now-btn" onclick="refreshNow()">
+                    🔄 Refresh Dashboard
+                </button>
+                
+                <button id="autoRefreshBtn" class="auto-refresh-btn" onclick="toggleAutoRefresh()">
+                    🔄 Enable Auto-refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Recent Registrations (Last 10) -->
+        <div class="recent-registrations">
+            <h2>⏱️ Recent Pledge Completions (Last 10)</h2>
+            <div class="table-container">
+                <table class="registrations-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Completed At</th>
+                            <th>Status</th>
+                            <th style="text-align: center;">Quick Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentRegistrations">
+                        <tr>
+                            <td colspan="7" class="loading">Loading recent records...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    `;
 }
 
 /* ─── Dashboard Stats Loading ───────────────────────────────────────────────── */
@@ -686,7 +923,6 @@ function toggleAutoRefresh() {
 
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-        // Escape closes modals
         if (e.key === 'Escape') {
             closeConfirmModal();
         }
