@@ -783,10 +783,10 @@ function sendFreeChat() {
 
 // ─── Preload badge and certificate template images at boot ──────────────────
 const _badgeImg = new Image();
-_badgeImg.src   = "/oath/assets/badge-template.png";
+_badgeImg.src   = "/oath/assets/badge-template.png?v=" + Date.now();
 
 const _certImg = new Image();
-_certImg.src   = "/oath/assets/certificate-template.png";
+_certImg.src   = "/oath/assets/certificate-template.png?v=" + Date.now();
 // onload/onerror handled silently — render functions check naturalWidth
 
 // ─── Helper: Draw Name on Badge (Complex Layout) ──────────────────────────────
