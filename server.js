@@ -731,7 +731,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Admin page routes - handle all variations BEFORE static files
+// Admin page routes — /oath/admin1 is the primary URL
 app.get(["/oath/admin1", "/oath/admin1.html", "/admin1", "/oath.admin1"], (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -739,7 +739,7 @@ app.get(["/oath/admin1", "/oath/admin1.html", "/admin1", "/oath.admin1"], (req, 
   res.sendFile(path.join(__dirname, "admin.html"));
 });
 
-// Legacy admin redirects (redirect old admin URLs to new admin1 for compatibility)
+// Legacy: redirect old /oath/admin URLs to /oath/admin1
 app.get(["/oath/admin", "/oath/admin.html", "/admin", "/oath.admin"], (req, res) => {
   res.redirect(301, "/oath/admin1");
 });
@@ -765,12 +765,19 @@ process.on("SIGINT", async () => {
 /* ─── Start ────────────────────────────────────────────────────────────────── */
 app.listen(PORT, () => {
   console.log(`\n✅  AI Ethics Pledge`);
-  console.log(`    Local:     http://localhost:${PORT}`);
-  console.log(`    Frontend:  https://vucse.app/oath`);
-  console.log(`    API:       https://vucse.app${API_PATH}`);
-  console.log(`    Database:  ${DATABASE_URL.replace(/:([^@/]+)@/, ":****@")}`);
+  console.log(`    Local:          http://localhost:${PORT}`);
+  console.log(`    Frontend:       https://vucse.app/oath`);
+  console.log(`    API:            https://vucse.app${API_PATH}`);
+  console.log(`    Database:       ${DATABASE_URL.replace(/:([^@/]+)@/, ":****@")}`);
   if (EXISTING_DB_URL) {
-    console.log(`    Lookup DB: ${EXISTING_DB_URL.replace(/:([^@/]+)@/, ":****@")}`);
+    console.log(`    Lookup DB:      ${EXISTING_DB_URL.replace(/:([^@/]+)@/, ":****@")}`);
   }
+  console.log();
+  console.log(`✅  Admin Dashboard`);
+  console.log(`    Local:          http://localhost:${PORT}/oath/admin1`);
+  console.log(`    Production:     https://vucse.app/oath/admin1`);
+  console.log(`    Admin API:      https://vucse.app${API_PATH}/admin`);
+  console.log(`    Shortcut:       https://vucse.app/admin1  →  /oath/admin1`);
+  console.log(`    Legacy:         https://vucse.app/oath/admin  →  /oath/admin1`);
   console.log();
 });
