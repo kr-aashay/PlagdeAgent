@@ -85,7 +85,7 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
 if [ "$HTTP_CODE" = "200" ]; then
   ok "API is live → https://${SERVER_HOST}/APO/health"
   ok "Frontend  → https://${SERVER_HOST}/oath"
-  ok "Admin     → https://${SERVER_HOST}/oath/admin"
+  ok "Admin     → https://${SERVER_HOST}/oath/admin1"
 else
   echo "⚠️  Health check returned HTTP ${HTTP_CODE}."
   echo "   Check server logs: ssh ${SERVER_USER}@${SERVER_HOST} 'pm2 logs ai-pledge --lines 30'"

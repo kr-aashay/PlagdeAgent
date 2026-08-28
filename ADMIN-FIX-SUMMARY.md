@@ -69,11 +69,14 @@
 
 ## Deployment URLs
 
-- **Production Admin**: `https://vucse.app/oath/admin`
+- **Production Admin**: `https://vucse.app/oath/admin1`
 - **Alternative URLs**: All redirect to main admin URL
-  - `https://vucse.app/admin`
-  - `https://vucse.app/oath.admin`
-  - `https://vucse.app/oath/admin.html`
+  - `https://vucse.app/admin1`
+  - `https://vucse.app/oath.admin1` 
+  - `https://vucse.app/oath/admin1.html`
+- **Legacy URLs**: Old admin URLs redirect to new admin1
+  - `https://vucse.app/admin` → redirects to `/oath/admin1`
+  - `https://vucse.app/oath/admin` → redirects to `/oath/admin1`
 
 ## Cache-Busting Features
 

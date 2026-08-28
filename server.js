@@ -732,11 +732,16 @@ app.use((req, res, next) => {
 });
 
 // Admin page routes - handle all variations BEFORE static files
-app.get(["/oath/admin", "/oath/admin.html", "/admin", "/oath.admin"], (req, res) => {
+app.get(["/oath/admin1", "/oath/admin1.html", "/admin1", "/oath.admin1"], (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+// Legacy admin redirects (redirect old admin URLs to new admin1 for compatibility)
+app.get(["/oath/admin", "/oath/admin.html", "/admin", "/oath.admin"], (req, res) => {
+  res.redirect(301, "/oath/admin1");
 });
 
 app.use("/oath", express.static(STATIC_DIR));
