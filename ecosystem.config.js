@@ -8,12 +8,14 @@
      pm2 save && pm2 startup                 # survive reboots
    ═══════════════════════════════════════════════════════════════════════════ */
 
+const path = require("path");
+
 module.exports = {
   apps: [
     {
       name:          "ai-pledge",
       script:        "server.js",
-      cwd:           "/var/www/ai-pledge",   // path on the server
+      cwd:           __dirname,   // Automatically uses current project directory
 
       // Keep one instance — change to "cluster" + instances: "max" for multi-core
       instances:     1,
@@ -30,9 +32,9 @@ module.exports = {
         PORT:     "6003"
       },
 
-      // Log files (PM2 default is ~/.pm2/logs/ — override here if needed)
-      out_file:   "/var/www/ai-pledge/logs/out.log",
-      error_file: "/var/www/ai-pledge/logs/error.log",
+      // Log files
+      out_file:   path.join(__dirname, "logs/out.log"),
+      error_file: path.join(__dirname, "logs/error.log"),
       merge_logs: true,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z"
     }
