@@ -123,9 +123,9 @@ async function fetchDepartmentFromExistingDB(type, identifier) {
 /* ─── Middleware ───────────────────────────────────────────────────────────── */
 app.use(express.json({ limit: "1mb" }));
 
-// CORS — allow requests from the frontend origin
+// CORS — allow requests from any frontend origin (IP or domain)
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://vucse.app");
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.sendStatus(204);
