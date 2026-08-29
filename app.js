@@ -741,18 +741,20 @@ function agreeAndReveal() {
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
 
-    // Automatically trigger certificate and badge downloads
+    // Automatically trigger certificate download
     downloadFile("certificate")
-      .catch(err => console.warn("Auto certificate download failed:", err.message))
-      .finally(() => {
-        setTimeout(() => {
-          downloadFile("badge").catch(err => console.warn("Auto badge download failed:", err.message));
-        }, 500);
-      });
+      .catch(err => console.warn("Auto certificate download failed:", err.message));
 
+    // Render badge preview first; once the image is confirmed loaded,
+    // trigger the badge download — avoids _badgeImg.onload race condition.
     renderBadgePreview(state.result, () => {
       const certOverlay = document.getElementById("certModalOverlay");
       if (certOverlay) certOverlay.style.display = "flex";
+
+      // Badge image is now guaranteed to be loaded; download immediately
+      setTimeout(() => {
+        downloadFile("badge").catch(err => console.warn("Auto badge download failed:", err.message));
+      }, 400);
     });
 
     $downloadCertBtn.classList.remove("locked");
