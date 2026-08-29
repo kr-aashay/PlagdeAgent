@@ -9,6 +9,11 @@ let autoRefreshInterval = null;
 let autoRefreshEnabled = false;
 let currentMemberPage = 1;
 let currentSearchTerm = '';
+let currentFilterYear = 'all';
+let currentFilterDept = 'all';
+let cachedFilterOptions = { years: [], departments: [] };
+let cachedStatsData = null;
+let deptSearchTerm = '';
 let searchDebounceTimer = null;
 let activeConfirmCallback = null;
 
@@ -83,6 +88,7 @@ async function checkAuthAndInit() {
         if (res.ok) {
             hideLoginModal();
             mountDashboard();
+            loadFilterOptions();
             loadDashboardData();
             loadMembers(1);
         } else {
@@ -167,6 +173,7 @@ async function handleLoginSubmit(event) {
         mountDashboard();
         showNotification('Signed in as Admin', 'success');
 
+        loadFilterOptions();
         loadDashboardData();
         loadMembers(1);
 
@@ -258,34 +265,66 @@ function mountDashboard() {
 
         <!-- Breakdown Section -->
         <div class="breakdown-section">
-            <h2>Registration Breakdown</h2>
-            <div class="breakdown-grid">
+            <div class="breakdown-header">
+                <div>
+                    <h2>📊 Registration & Category Breakdown</h2>
+                    <p class="section-desc" style="margin-bottom: 0;">Overview by role, academic year, and branch / department.</p>
+                </div>
+            </div>
+
+            <!-- Role Breakdown Cards -->
+            <div class="breakdown-grid" style="margin-top: 16px;">
                 <div class="breakdown-card">
                     <h3>👨‍🎓 Students</h3>
                     <div class="breakdown-stats">
                         <div class="breakdown-item">
                             <span class="breakdown-label">Completed:</span>
-                            <span class="breakdown-value" id="studentsRegistered">-</span>
+                            <span class="breakdown-value text-success" id="studentsRegistered">-</span>
                         </div>
                         <div class="breakdown-item">
                             <span class="breakdown-label">Pending:</span>
-                            <span class="breakdown-value" id="studentsUnregistered">-</span>
+                            <span class="breakdown-value text-warning" id="studentsUnregistered">-</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="breakdown-card">
-                    <h3>👨‍💼 Employees</h3>
+                    <h3>👨‍💼 Employees / Faculty</h3>
                     <div class="breakdown-stats">
                         <div class="breakdown-item">
                             <span class="breakdown-label">Completed:</span>
-                            <span class="breakdown-value" id="employeesRegistered">-</span>
+                            <span class="breakdown-value text-success" id="employeesRegistered">-</span>
                         </div>
                         <div class="breakdown-item">
                             <span class="breakdown-label">Pending:</span>
-                            <span class="breakdown-value" id="employeesUnregistered">-</span>
+                            <span class="breakdown-value text-warning" id="employeesUnregistered">-</span>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Year-Wise Breakdown -->
+            <div class="analytics-subblock">
+                <div class="subblock-header">
+                    <h4>🎓 Year-Wise Student Progress</h4>
+                    <span class="subblock-hint">Click any year card to filter member records below</span>
+                </div>
+                <div class="year-breakdown-grid" id="yearBreakdownGrid">
+                    <div class="loading-placeholder">Loading year data...</div>
+                </div>
+            </div>
+
+            <!-- Department-Wise Breakdown -->
+            <div class="analytics-subblock">
+                <div class="subblock-header">
+                    <h4>🏢 Department & Branch Progress</h4>
+                    <div class="dept-search-wrap">
+                        <span class="search-mini-icon">🔍</span>
+                        <input type="text" id="deptBreakdownSearch" placeholder="Filter departments list..." oninput="onDeptSearchInput(event)" />
+                    </div>
+                </div>
+                <div class="dept-breakdown-container" id="deptBreakdownContainer">
+                    <div class="loading-placeholder">Loading department data...</div>
                 </div>
             </div>
         </div>
@@ -298,7 +337,7 @@ function mountDashboard() {
                     <span class="btn-icon">📑</span>
                     <span class="btn-text">
                         <strong>Download Registered List</strong>
-                        <small>Excel sheet with all participants who completed the pledge</small>
+                        <small>Excel sheet of participants who completed the pledge (respects current filters)</small>
                     </span>
                 </button>
 
@@ -306,7 +345,7 @@ function mountDashboard() {
                     <span class="btn-icon">📋</span>
                     <span class="btn-text">
                         <strong>Download Unregistered List</strong>
-                        <small>Excel sheet with eligible participants yet to complete</small>
+                        <small>Excel sheet of eligible participants yet to complete (respects current filters)</small>
                     </span>
                 </button>
             </div>
@@ -320,11 +359,11 @@ function mountDashboard() {
         </div>
 
         <!-- Member Management Section -->
-        <div class="management-section">
+        <div class="management-section" id="managementSection">
             <div class="section-header-wrap">
                 <div>
                     <h2>👥 Member Management & Oath Control</h2>
-                    <p class="section-desc">Search any student or employee to <strong>reset their oath status (allow retake)</strong> or <strong>delete records</strong>.</p>
+                    <p class="section-desc">Filter by <strong>Academic Year</strong>, <strong>Department / Branch</strong>, <strong>Type</strong> or <strong>Status</strong> to reset oath status or manage records.</p>
                 </div>
                 <button class="btn-secondary" onclick="loadMembers(1)">🔄 Refresh List</button>
             </div>
@@ -343,19 +382,34 @@ function mountDashboard() {
                 </div>
 
                 <div class="filter-controls">
-                    <select id="memberTypeFilter" onchange="onFilterChange()">
-                        <option value="all">All Types</option>
+                    <select id="memberTypeFilter" onchange="onFilterChange()" title="Filter by Member Type">
+                        <option value="all">👥 All Types</option>
                         <option value="student">👨‍🎓 Students Only</option>
                         <option value="employee">👨‍💼 Employees Only</option>
                     </select>
 
-                    <select id="memberStatusFilter" onchange="onFilterChange()">
-                        <option value="all">All Oath Statuses</option>
-                        <option value="completed">✅ Oath Completed</option>
-                        <option value="pending">⏳ Pending / Not Taken</option>
+                    <select id="memberStatusFilter" onchange="onFilterChange()" title="Filter by Oath Status">
+                        <option value="all">⚖️ All Statuses</option>
+                        <option value="completed">✅ Completed</option>
+                        <option value="pending">⏳ Pending</option>
                     </select>
+
+                    <select id="memberYearFilter" onchange="onFilterChange()" title="Filter by Academic Year">
+                        <option value="all">🎓 All Years</option>
+                    </select>
+
+                    <select id="memberDeptFilter" onchange="onFilterChange()" title="Filter by Department or Branch">
+                        <option value="all">🏢 All Departments</option>
+                    </select>
+
+                    <button id="resetFiltersBtn" class="btn-reset-filters" onclick="resetAllFilters()" title="Reset all filters to default">
+                        🔄 Reset
+                    </button>
                 </div>
             </div>
+
+            <!-- Active Filter Indicators -->
+            <div id="activeFiltersSummary" class="active-filters-bar" style="display: none;"></div>
 
             <!-- Members Data Table -->
             <div class="table-container">
@@ -365,7 +419,7 @@ function mountDashboard() {
                             <th>Type</th>
                             <th>Identifier / Reg No</th>
                             <th>Name</th>
-                            <th>Department / Branch</th>
+                            <th>Department / Branch & Year</th>
                             <th>Oath Status</th>
                             <th>Downloads</th>
                             <th style="text-align: center;">Actions</th>
@@ -430,6 +484,168 @@ function mountDashboard() {
         </div>
     </div>
     `;
+
+    populateFilterDropdowns();
+}
+
+/* ─── Filter Options Loading & Helpers ───────────────────────────────────────── */
+
+async function loadFilterOptions() {
+    try {
+        const res = await authenticatedFetch('/APO/admin/filter-options?t=' + Date.now());
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.ok) return;
+
+        cachedFilterOptions = {
+            years: data.years || [],
+            departments: data.departments || []
+        };
+
+        populateFilterDropdowns();
+    } catch (err) {
+        console.warn('Failed to load filter options:', err.message);
+    }
+}
+
+function populateFilterDropdowns() {
+    const yearSelect = document.getElementById('memberYearFilter');
+    const deptSelect = document.getElementById('memberDeptFilter');
+
+    if (yearSelect && cachedFilterOptions.years.length > 0) {
+        const prevYear = yearSelect.value || currentFilterYear;
+        let html = '<option value="all">🎓 All Years</option>';
+        cachedFilterOptions.years.forEach(y => {
+            const label = formatYearLabel(y);
+            html += `<option value="${escapeHtml(y)}" ${prevYear === y ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        });
+        yearSelect.innerHTML = html;
+    }
+
+    if (deptSelect && cachedFilterOptions.departments.length > 0) {
+        const prevDept = deptSelect.value || currentFilterDept;
+        let html = '<option value="all">🏢 All Departments / Branches</option>';
+        cachedFilterOptions.departments.forEach(d => {
+            html += `<option value="${escapeHtml(d)}" ${prevDept === d ? 'selected' : ''}>${escapeHtml(d)}</option>`;
+        });
+        deptSelect.innerHTML = html;
+    }
+}
+
+function formatYearLabel(y) {
+    if (!y) return 'Unknown Year';
+    const num = parseInt(y, 10);
+    if (!isNaN(num)) {
+        const suffix = getOrdinal(num);
+        return `Year ${num} (${suffix} Year)`;
+    }
+    return `Year ${y}`;
+}
+
+function getOrdinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function resetAllFilters() {
+    const searchInput = document.getElementById('memberSearchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const typeSelect = document.getElementById('memberTypeFilter');
+    const statusSelect = document.getElementById('memberStatusFilter');
+    const yearSelect = document.getElementById('memberYearFilter');
+    const deptSelect = document.getElementById('memberDeptFilter');
+
+    if (searchInput) searchInput.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (typeSelect) typeSelect.value = 'all';
+    if (statusSelect) statusSelect.value = 'all';
+    if (yearSelect) yearSelect.value = 'all';
+    if (deptSelect) deptSelect.value = 'all';
+
+    currentSearchTerm = '';
+    currentFilterYear = 'all';
+    currentFilterDept = 'all';
+
+    updateActiveFiltersSummary();
+    loadMembers(1);
+    showNotification('All filters reset', 'info');
+}
+
+function filterByYear(year) {
+    const yearSelect = document.getElementById('memberYearFilter');
+    if (yearSelect) {
+        yearSelect.value = year;
+        currentFilterYear = year;
+    }
+    const typeSelect = document.getElementById('memberTypeFilter');
+    if (typeSelect && typeSelect.value === 'employee') {
+        typeSelect.value = 'all';
+    }
+    onFilterChange();
+    scrollToManagement();
+    showNotification(`Filtered by Year ${year}`, 'info');
+}
+
+function filterByDept(dept) {
+    const deptSelect = document.getElementById('memberDeptFilter');
+    if (deptSelect) {
+        deptSelect.value = dept;
+        currentFilterDept = dept;
+    }
+    onFilterChange();
+    scrollToManagement();
+    showNotification(`Filtered by: ${dept}`, 'info');
+}
+
+function scrollToManagement() {
+    const target = document.getElementById('managementSection');
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function updateActiveFiltersSummary() {
+    const bar = document.getElementById('activeFiltersSummary');
+    if (!bar) return;
+
+    const type = document.getElementById('memberTypeFilter')?.value || 'all';
+    const status = document.getElementById('memberStatusFilter')?.value || 'all';
+    const year = document.getElementById('memberYearFilter')?.value || 'all';
+    const dept = document.getElementById('memberDeptFilter')?.value || 'all';
+    const search = currentSearchTerm.trim();
+
+    const activeChips = [];
+
+    if (search) {
+        activeChips.push(`<span class="filter-chip">🔍 "${escapeHtml(search)}" <button onclick="clearSearch()">✕</button></span>`);
+    }
+    if (type !== 'all') {
+        const label = type === 'student' ? '👨‍🎓 Students' : '👨‍💼 Employees';
+        activeChips.push(`<span class="filter-chip">${label} <button onclick="document.getElementById('memberTypeFilter').value='all';onFilterChange();">✕</button></span>`);
+    }
+    if (status !== 'all') {
+        const label = status === 'completed' ? '✅ Completed' : '⏳ Pending';
+        activeChips.push(`<span class="filter-chip">${label} <button onclick="document.getElementById('memberStatusFilter').value='all';onFilterChange();">✕</button></span>`);
+    }
+    if (year !== 'all') {
+        activeChips.push(`<span class="filter-chip chip-highlight">🎓 Year ${escapeHtml(year)} <button onclick="document.getElementById('memberYearFilter').value='all';onFilterChange();">✕</button></span>`);
+    }
+    if (dept !== 'all') {
+        activeChips.push(`<span class="filter-chip chip-highlight">🏢 ${escapeHtml(dept)} <button onclick="document.getElementById('memberDeptFilter').value='all';onFilterChange();">✕</button></span>`);
+    }
+
+    if (activeChips.length > 0) {
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+            <span class="active-filters-label">Active Filters:</span>
+            <div class="active-chips-list">${activeChips.join('')}</div>
+            <button class="clear-all-chip-btn" onclick="resetAllFilters()">Clear All</button>
+        `;
+    } else {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+    }
 }
 
 /* ─── Dashboard Stats Loading ───────────────────────────────────────────────── */
@@ -448,6 +664,7 @@ async function loadDashboardData() {
             throw new Error(data.error || 'API returned error');
         }
 
+        cachedStatsData = data;
         updateDashboardUI(data);
         updateLastUpdated();
 
@@ -471,11 +688,17 @@ function updateDashboardUI(data) {
         const rate = data.total > 0 ? ((data.registered.total / data.total) * 100).toFixed(1) : '0.0';
         updateElement('completionRate', rate + '%');
 
-        // Breakdown
+        // Role Breakdown
         updateElement('studentsRegistered', formatNumber(data.registered.students));
         updateElement('studentsUnregistered', formatNumber(data.unregistered.students));
         updateElement('employeesRegistered', formatNumber(data.registered.employees));
         updateElement('employeesUnregistered', formatNumber(data.unregistered.employees));
+
+        // Year-wise Analytics Breakdown
+        renderYearBreakdown(data.yearStats || []);
+
+        // Department-wise Analytics Breakdown
+        renderDepartmentBreakdown(data.departmentStats || []);
 
         // Recent registrations
         updateRecentRegistrations(data.recentRegistrations || []);
@@ -485,6 +708,122 @@ function updateDashboardUI(data) {
     } catch (error) {
         console.error('Error updating UI:', error);
     }
+}
+
+function renderYearBreakdown(yearStats) {
+    const grid = document.getElementById('yearBreakdownGrid');
+    if (!grid) return;
+
+    if (!yearStats || yearStats.length === 0) {
+        grid.innerHTML = '<div class="loading-placeholder">No year records found.</div>';
+        return;
+    }
+
+    grid.innerHTML = yearStats.map(y => {
+        const rateNum = parseFloat(y.rate) || 0;
+        return `
+            <div class="year-card" onclick="filterByYear('${escapeJs(y.year)}')" title="Click to filter members by Year ${escapeHtml(y.year)}">
+                <div class="year-card-top">
+                    <div class="year-pill-badge">🎓 Year ${escapeHtml(y.year)}</div>
+                    <span class="year-rate-badge">${y.rate}% Completed</span>
+                </div>
+                <div class="year-progress-track">
+                    <div class="year-progress-fill" style="width: ${rateNum}%;"></div>
+                </div>
+                <div class="year-card-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">Completed</span>
+                        <span class="metric-val text-success">${formatNumber(y.registered)}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Pending</span>
+                        <span class="metric-val text-warning">${formatNumber(y.unregistered)}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Total</span>
+                        <span class="metric-val">${formatNumber(y.total)}</span>
+                    </div>
+                </div>
+                <div class="year-card-footer">
+                    <span>🔍 View Year ${escapeHtml(y.year)} Members →</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function onDeptSearchInput(e) {
+    deptSearchTerm = (e.target.value || '').trim().toLowerCase();
+    if (cachedStatsData && cachedStatsData.departmentStats) {
+        renderDepartmentBreakdown(cachedStatsData.departmentStats);
+    }
+}
+
+function renderDepartmentBreakdown(deptStats) {
+    const container = document.getElementById('deptBreakdownContainer');
+    if (!container) return;
+
+    if (!deptStats || deptStats.length === 0) {
+        container.innerHTML = '<div class="loading-placeholder">No department records found.</div>';
+        return;
+    }
+
+    let filtered = deptStats;
+    if (deptSearchTerm) {
+        filtered = deptStats.filter(d => d.department.toLowerCase().includes(deptSearchTerm));
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="loading-placeholder">No departments matching "${escapeHtml(deptSearchTerm)}"</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="dept-table-wrap">
+            <table class="dept-stats-table">
+                <thead>
+                    <tr>
+                        <th>Department / Branch</th>
+                        <th style="text-align: center;">Completion Rate</th>
+                        <th style="text-align: right;">Completed</th>
+                        <th style="text-align: right;">Pending</th>
+                        <th style="text-align: right;">Total</th>
+                        <th style="text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(d => {
+                        const rateNum = parseFloat(d.rate) || 0;
+                        return `
+                            <tr>
+                                <td>
+                                    <div class="dept-table-name">
+                                        <strong>${escapeHtml(d.department)}</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="dept-rate-col">
+                                        <div class="dept-rate-bar-track">
+                                            <div class="dept-rate-bar-fill" style="width: ${rateNum}%;"></div>
+                                        </div>
+                                        <span class="dept-rate-text">${d.rate}%</span>
+                                    </div>
+                                </td>
+                                <td style="text-align: right;"><strong class="text-success">${formatNumber(d.registered)}</strong></td>
+                                <td style="text-align: right;"><span class="text-warning">${formatNumber(d.unregistered)}</span></td>
+                                <td style="text-align: right;"><strong>${formatNumber(d.total)}</strong></td>
+                                <td style="text-align: center;">
+                                    <button class="btn-table-filter" onclick="filterByDept('${escapeJs(d.department)}')" title="Filter member list by this department">
+                                        🔍 Filter
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 function updateRecentRegistrations(registrations) {
@@ -544,6 +883,7 @@ function onSearchInput(e) {
     currentSearchTerm = val;
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
+        updateActiveFiltersSummary();
         loadMembers(1);
     }, 300);
 }
@@ -555,10 +895,14 @@ function clearSearch() {
     if (clearBtn) clearBtn.style.display = 'none';
 
     currentSearchTerm = '';
+    updateActiveFiltersSummary();
     loadMembers(1);
 }
 
 function onFilterChange() {
+    currentFilterYear = document.getElementById('memberYearFilter')?.value || 'all';
+    currentFilterDept = document.getElementById('memberDeptFilter')?.value || 'all';
+    updateActiveFiltersSummary();
     loadMembers(1);
 }
 
@@ -571,6 +915,8 @@ async function loadMembers(page = 1) {
 
     const typeFilter = document.getElementById('memberTypeFilter')?.value || 'all';
     const statusFilter = document.getElementById('memberStatusFilter')?.value || 'all';
+    const yearFilter = document.getElementById('memberYearFilter')?.value || 'all';
+    const deptFilter = document.getElementById('memberDeptFilter')?.value || 'all';
     const search = currentSearchTerm.trim();
 
     try {
@@ -578,6 +924,8 @@ async function loadMembers(page = 1) {
             q: search,
             type: typeFilter,
             status: statusFilter,
+            year: yearFilter,
+            department: deptFilter,
             page: page,
             limit: 15,
             t: Date.now()
@@ -627,8 +975,13 @@ function renderMembersTable(members) {
                     ${m.archetype ? `<br><span class="archetype-tag">🎖️ ${escapeHtml(m.archetype)}</span>` : ''}
                 </td>
                 <td>
-                    ${escapeHtml(m.department || 'N/A')}
-                    ${m.branch_shortname ? `<small style="color:#64748b;"> (${escapeHtml(m.branch_shortname)})</small>` : ''}
+                    <div class="dept-cell-wrap">
+                        <span class="dept-title">${escapeHtml(m.department || 'N/A')}</span>
+                        <div class="dept-badges-row">
+                            ${m.branch_shortname ? `<span class="branch-pill">${escapeHtml(m.branch_shortname)}</span>` : ''}
+                            ${m.cyear ? `<span class="year-pill">Year ${escapeHtml(m.cyear)}${m.sectioncode ? ` • Sec ${escapeHtml(m.sectioncode)}` : ''}</span>` : ''}
+                        </div>
+                    </div>
                 </td>
                 <td>
                     <span class="status-badge ${isOathCompleted ? 'status-completed' : 'status-pending'}">
@@ -813,11 +1166,23 @@ function closeConfirmModal() {
 /* ─── Report Downloads ──────────────────────────────────────────────────────── */
 
 async function downloadRegistered() {
-    await downloadFile('/APO/admin/export/registered', 'registered_participants');
+    const year = document.getElementById('memberYearFilter')?.value || 'all';
+    const dept = document.getElementById('memberDeptFilter')?.value || 'all';
+    const params = new URLSearchParams();
+    if (year !== 'all') params.append('year', year);
+    if (dept !== 'all') params.append('department', dept);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    await downloadFile(`/APO/admin/export/registered${qs}`, 'registered_participants');
 }
 
 async function downloadUnregistered() {
-    await downloadFile('/APO/admin/export/unregistered', 'unregistered_participants');
+    const year = document.getElementById('memberYearFilter')?.value || 'all';
+    const dept = document.getElementById('memberDeptFilter')?.value || 'all';
+    const params = new URLSearchParams();
+    if (year !== 'all') params.append('year', year);
+    if (dept !== 'all') params.append('department', dept);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    await downloadFile(`/APO/admin/export/unregistered${qs}`, 'unregistered_participants');
 }
 
 async function downloadFile(url, filename) {

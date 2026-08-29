@@ -230,6 +230,26 @@ async function testGetParticipants() {
     "Authorization": `Bearer ${token}`
   });
   logTest("Admin members search responds", membersRes.status === 200 && membersRes.data?.ok === true);
+
+  // Test admin filter options endpoint
+  const filterOptionsRes = await makeRequest("GET", "/admin/filter-options", null, {
+    "Authorization": `Bearer ${token}`
+  });
+  logTest("Admin filter-options responds", filterOptionsRes.status === 200 && filterOptionsRes.data?.ok === true);
+  logTest("Filter-options includes years and departments arrays", Array.isArray(filterOptionsRes.data?.years) && Array.isArray(filterOptionsRes.data?.departments));
+
+  // Test admin stats breakdown
+  const statsRes = await makeRequest("GET", "/admin/stats", null, {
+    "Authorization": `Bearer ${token}`
+  });
+  logTest("Admin stats responds", statsRes.status === 200 && statsRes.data?.ok === true);
+  logTest("Admin stats includes yearStats and departmentStats", Array.isArray(statsRes.data?.yearStats) && Array.isArray(statsRes.data?.departmentStats));
+
+  // Test admin members search with year and dept filters
+  const filteredMembersRes = await makeRequest("GET", "/admin/members?year=1&limit=5", null, {
+    "Authorization": `Bearer ${token}`
+  });
+  logTest("Admin members with year filter responds", filteredMembersRes.status === 200 && filteredMembersRes.data?.ok === true);
 }
 
 async function testValidation() {

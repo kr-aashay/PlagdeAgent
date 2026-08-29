@@ -662,6 +662,72 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
       LIMIT 10
     `);
     
+    // Year-wise stats for students
+    const yearStatsResult = await mainPool.query(`
+      SELECT 
+        COALESCE(NULLIF(TRIM(cyear), ''), 'Unknown') as year,
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM students
+      GROUP BY COALESCE(NULLIF(TRIM(cyear), ''), 'Unknown')
+      ORDER BY year ASC
+    `);
+    const yearStats = yearStatsResult.rows.map(r => {
+      const tot = parseInt(r.total, 10);
+      const reg = parseInt(r.registered, 10);
+      return {
+        year: r.year,
+        total: tot,
+        registered: reg,
+        unregistered: tot - reg,
+        rate: tot > 0 ? ((reg / tot) * 100).toFixed(1) : "0.0"
+      };
+    });
+
+    // Department-wise stats (students & employees)
+    const deptQueries = [
+      `SELECT 
+        COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), 'General') as department,
+        COUNT(*) as total,
+        COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+      FROM students
+      GROUP BY COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), 'General')`
+    ];
+
+    if (await tableExists("employees")) {
+      deptQueries.push(`
+        UNION ALL
+        SELECT 
+          COALESCE(NULLIF(TRIM(department), ''), 'General') as department,
+          COUNT(*) as total,
+          COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
+        FROM employees
+        GROUP BY COALESCE(NULLIF(TRIM(department), ''), 'General')
+      `);
+    }
+
+    const deptStatsResult = await mainPool.query(`
+      SELECT 
+        department,
+        SUM(total)::int as total,
+        SUM(registered)::int as registered
+      FROM (${deptQueries.join("\n")}) as combined_depts
+      GROUP BY department
+      ORDER BY total DESC, department ASC
+    `);
+
+    const departmentStats = deptStatsResult.rows.map(r => {
+      const tot = parseInt(r.total, 10);
+      const reg = parseInt(r.registered, 10);
+      return {
+        department: r.department,
+        total: tot,
+        registered: reg,
+        unregistered: tot - reg,
+        rate: tot > 0 ? ((reg / tot) * 100).toFixed(1) : "0.0"
+      };
+    });
+    
     return res.json({
       ok: true,
       total: totalExpected,
@@ -675,6 +741,8 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
         students: studentsTotal - studentsRegistered,
         employees: employeesTotal - employeesRegistered
       },
+      yearStats,
+      departmentStats,
       recentRegistrations: recentResult.rows.map(row => ({
         type: row.type,
         id: row.id,
@@ -695,12 +763,60 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
   }
 });
 
+// GET /APO/admin/filter-options - Distinct years and departments for admin filters
+api.get("/admin/filter-options", requireAdminAuth, async (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+
+    const yearsResult = await mainPool.query(`
+      SELECT DISTINCT cyear 
+      FROM students 
+      WHERE cyear IS NOT NULL AND TRIM(cyear) != ''
+      ORDER BY cyear ASC
+    `);
+    const years = yearsResult.rows.map(r => String(r.cyear).trim());
+
+    const studentDeptsResult = await mainPool.query(`
+      SELECT DISTINCT branchname as department FROM students WHERE branchname IS NOT NULL AND TRIM(branchname) != ''
+      UNION
+      SELECT DISTINCT branch_shortname as department FROM students WHERE branch_shortname IS NOT NULL AND TRIM(branch_shortname) != ''
+    `);
+    
+    let allDepts = new Set();
+    studentDeptsResult.rows.forEach(r => {
+      if (r.department && r.department.trim()) allDepts.add(r.department.trim());
+    });
+
+    if (await tableExists("employees")) {
+      const empDeptsResult = await mainPool.query(`
+        SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND TRIM(department) != ''
+      `);
+      empDeptsResult.rows.forEach(r => {
+        if (r.department && r.department.trim()) allDepts.add(r.department.trim());
+      });
+    }
+
+    const departments = Array.from(allDepts).sort((a, b) => a.localeCompare(b));
+
+    return res.json({
+      ok: true,
+      years,
+      departments
+    });
+  } catch (err) {
+    console.error("Admin filter options error:", err.message);
+    return res.status(500).json({ ok: false, error: "Database error fetching filter options." });
+  }
+});
+
 // GET /APO/admin/members - Search, filter, and paginate members
 api.get("/admin/members", requireAdminAuth, async (req, res) => {
   try {
     const search = (req.query.q || req.query.search || "").trim();
     const typeFilter = (req.query.type || "all").toLowerCase();
     const statusFilter = (req.query.status || "all").toLowerCase();
+    const yearFilter = (req.query.year || "all").trim();
+    const deptFilter = (req.query.department || req.query.dept || "all").trim();
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(5, parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
@@ -725,6 +841,20 @@ api.get("/admin/members", requireAdminAuth, async (req, res) => {
     } else if (statusFilter === "pending") {
       studentConds.push("(oath_taken = false OR oath_taken IS NULL)");
       employeeConds.push("(oath_taken = false OR oath_taken IS NULL)");
+    }
+
+    if (yearFilter && yearFilter !== "all") {
+      params.push(yearFilter);
+      studentConds.push(`cyear = $${paramIndex}`);
+      employeeConds.push("1=0"); // Employees have no cyear
+      paramIndex++;
+    }
+
+    if (deptFilter && deptFilter !== "all") {
+      params.push(deptFilter);
+      studentConds.push(`(branchname = $${paramIndex} OR branch_shortname = $${paramIndex} OR department = $${paramIndex})`);
+      employeeConds.push(`department = $${paramIndex}`);
+      paramIndex++;
     }
 
     if (typeFilter === "all" || typeFilter === "student") {
@@ -923,7 +1053,25 @@ api.delete("/admin/members/:type/:id", requireAdminAuth, async (req, res) => {
 // GET /APO/admin/export/registered - Export registered students to Excel
 api.get("/admin/export/registered", requireAdminAuth, async (req, res) => {
   try {
-    // Fetch all registered students with new attributes
+    const yearFilter = (req.query.year || "all").trim();
+    const deptFilter = (req.query.department || req.query.dept || "all").trim();
+
+    let studentConds = ["oath_taken = true"];
+    let params = [];
+    let pIdx = 1;
+
+    if (yearFilter && yearFilter !== "all") {
+      params.push(yearFilter);
+      studentConds.push(`cyear = $${pIdx++}`);
+    }
+
+    if (deptFilter && deptFilter !== "all") {
+      params.push(deptFilter);
+      studentConds.push(`(branchname = $${pIdx} OR branch_shortname = $${pIdx} OR department = $${pIdx})`);
+      pIdx++;
+    }
+
+    // Fetch registered students with filters
     const result = await mainPool.query(`
       SELECT 
         registerno as "Register No",
@@ -941,9 +1089,9 @@ api.get("/admin/export/registered", requireAdminAuth, async (req, res) => {
         CASE WHEN certificate_downloaded THEN 'Yes' ELSE 'No' END as "Certificate Downloaded",
         CASE WHEN badge_downloaded THEN 'Yes' ELSE 'No' END as "Badge Downloaded"
       FROM students
-      WHERE oath_taken = true
+      WHERE ${studentConds.join(" AND ")}
       ORDER BY pledge_taken_at DESC
-    `);
+    `, params);
     
     // Create Excel workbook
     const worksheet = XLSX.utils.json_to_sheet(result.rows);
@@ -971,7 +1119,25 @@ api.get("/admin/export/registered", requireAdminAuth, async (req, res) => {
 // GET /APO/admin/export/unregistered - Export unregistered students to Excel
 api.get("/admin/export/unregistered", requireAdminAuth, async (req, res) => {
   try {
-    // Fetch all unregistered students with new attributes
+    const yearFilter = (req.query.year || "all").trim();
+    const deptFilter = (req.query.department || req.query.dept || "all").trim();
+
+    let studentConds = ["(oath_taken = false OR oath_taken IS NULL)"];
+    let params = [];
+    let pIdx = 1;
+
+    if (yearFilter && yearFilter !== "all") {
+      params.push(yearFilter);
+      studentConds.push(`cyear = $${pIdx++}`);
+    }
+
+    if (deptFilter && deptFilter !== "all") {
+      params.push(deptFilter);
+      studentConds.push(`(branchname = $${pIdx} OR branch_shortname = $${pIdx} OR department = $${pIdx})`);
+      pIdx++;
+    }
+
+    // Fetch unregistered students with filters
     const result = await mainPool.query(`
       SELECT 
         registerno as "Register No",
@@ -984,9 +1150,9 @@ api.get("/admin/export/unregistered", requireAdminAuth, async (req, res) => {
         sectioncode as "Section",
         TO_CHAR(registered_at, 'YYYY-MM-DD HH24:MI:SS') as "Added to System At"
       FROM students
-      WHERE oath_taken = false OR oath_taken IS NULL
+      WHERE ${studentConds.join(" AND ")}
       ORDER BY name ASC
-    `);
+    `, params);
     
     // Create Excel workbook
     const worksheet = XLSX.utils.json_to_sheet(result.rows);
