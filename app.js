@@ -737,12 +737,18 @@ function agreeAndReveal() {
 
     addMsg("agent",
       `🏅 <strong>Your commitment is recorded, ${esc(state.userName)}!</strong><br><br>
-       Your personalised certificate is downloading automatically. You can also download your <strong>AI Ethics Badge</strong> below.<br><br>
+       Your personalised certificate and AI Ethics Badge are downloading automatically.<br><br>
        Feel free to ask me any follow-up questions about AI ethics below.`
     );
 
-    // Automatically trigger certificate download
-    downloadFile("certificate").catch(err => console.warn("Auto certificate download failed:", err.message));
+    // Automatically trigger certificate and badge downloads
+    downloadFile("certificate")
+      .catch(err => console.warn("Auto certificate download failed:", err.message))
+      .finally(() => {
+        setTimeout(() => {
+          downloadFile("badge").catch(err => console.warn("Auto badge download failed:", err.message));
+        }, 500);
+      });
 
     renderBadgePreview(state.result, () => {
       const certOverlay = document.getElementById("certModalOverlay");
