@@ -737,8 +737,8 @@ function updateActiveFiltersSummary() {
         countsBadgeHtml = `
             <div class="active-count-indicator">
                 📊 <strong>${formatNumber(currentFilterCounts.total)}</strong> Found
-                <span class="count-pill text-success">✅ ${formatNumber(currentFilterCounts.completed)}</span>
-                <span class="count-pill text-warning">⏳ ${formatNumber(currentFilterCounts.pending)}</span>
+                <span class="count-pill pill-completed">✅ ${formatNumber(currentFilterCounts.completed)}</span>
+                <span class="count-pill pill-pending">⏳ ${formatNumber(currentFilterCounts.pending)}</span>
             </div>
         `;
     }
