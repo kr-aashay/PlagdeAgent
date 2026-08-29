@@ -687,11 +687,11 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
     // Department-wise stats (students & employees)
     const deptQueries = [
       `SELECT 
-        COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), 'General') as department,
+        COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), NULLIF(TRIM(department), ''), 'General') as department,
         COUNT(*) as total,
         COUNT(CASE WHEN oath_taken = true THEN 1 END) as registered
       FROM students
-      GROUP BY COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), 'General')`
+      GROUP BY COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), NULLIF(TRIM(department), ''), 'General')`
     ];
 
     if (await tableExists("employees")) {
@@ -780,6 +780,8 @@ api.get("/admin/filter-options", requireAdminAuth, async (req, res) => {
       SELECT DISTINCT branchname as department FROM students WHERE branchname IS NOT NULL AND TRIM(branchname) != ''
       UNION
       SELECT DISTINCT branch_shortname as department FROM students WHERE branch_shortname IS NOT NULL AND TRIM(branch_shortname) != ''
+      UNION
+      SELECT DISTINCT department as department FROM students WHERE department IS NOT NULL AND TRIM(department) != ''
     `);
     
     let allDepts = new Set();
