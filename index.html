@@ -187,6 +187,7 @@
         <div class="cert-modal-header">
           <span class="cert-modal-icon">🏅</span>
           <h3 class="cert-modal-title">Your Ethics Badge</h3>
+          <button id="closeCertModalBtn" onclick="document.getElementById('certModalOverlay').style.display='none'" style="margin-left:auto; background:rgba(255,255,255,0.1); border:none; color:#fff; border-radius:50%; width:28px; height:28px; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
         </div>
 
         <canvas id="badgeCanvas" width="420" height="420"></canvas>
@@ -195,7 +196,7 @@
           <div class="badge-summary" id="badgeSummary"></div>
           <div class="badge-actions">
             <button class="btn-download btn-certificate" id="downloadCertBtn" style="display:none;">📜 Download Certificate</button>
-            <button class="btn-download btn-badge" id="downloadBadgeBtn">🏅 Download Badge</button>
+            <button class="btn-download btn-badge" id="downloadBadgeBtn" style="display:none;">🏅 Download Badge</button>
           </div>
           <div class="badge-actions" style="margin-top: 1rem; display: none;">
             <button class="btn-restart" id="restartBtn">↺ Start Over</button>
@@ -214,7 +215,7 @@
     <div id="badgePanel"></div>
   </div>
 
-  <script src="/oath/app.js?v=1.2"></script>
+  <script src="/oath/app.js?v=1.3"></script>
 </body>
 
 </html>
