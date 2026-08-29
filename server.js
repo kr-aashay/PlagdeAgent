@@ -73,6 +73,39 @@ function requireAdminAuth(req, res, next) {
   });
 }
 
+const KNOWN_ACRONYMS = new Set([
+  "CSE", "DCSE", "ECE", "EEE", "MECH", "CIVIL", "IT", "AI", "ML", "AIDS", "CSBS", "AIML",
+  "MCA", "MBA", "BCA", "BBA", "BTECH", "MTECH", "PHD", "BSC", "MSC", "B.TECH", "M.TECH",
+  "VU", "APO"
+]);
+
+function toCleanTitleCase(str) {
+  if (!str) return "";
+  let clean = String(str).trim().replace(/\s+/g, " ");
+  clean = clean.replace(/\band\b/gi, "&").replace(/\s*&\s*/g, " & ");
+  
+  const words = clean.split(" ");
+  const formattedWords = words.map(word => {
+    const parenMatch = word.match(/^\((.*)\)$/);
+    if (parenMatch) {
+      const inner = parenMatch[1].toUpperCase();
+      return `(${inner})`;
+    }
+    const upper = word.toUpperCase();
+    if (KNOWN_ACRONYMS.has(upper)) return upper;
+    if (['&', 'of', 'in', 'the', 'for'].includes(word.toLowerCase())) {
+      return word.toLowerCase() === '&' ? '&' : word.toLowerCase();
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  let result = formattedWords.join(" ");
+  if (result.length > 0) {
+    result = result.charAt(0).toUpperCase() + result.slice(1);
+  }
+  return result;
+}
+
 /* ─── PostgreSQL Connection Pools ──────────────────────────────────────────── */
 const DATABASE_URL = process.env.DATABASE_URL;
 const EXISTING_DB_URL = process.env.EXISTING_DB_URL;
@@ -683,39 +716,6 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
         rate: tot > 0 ? ((reg / tot) * 100).toFixed(1) : "0.0"
       };
     });
-
-const KNOWN_ACRONYMS = new Set([
-  "CSE", "DCSE", "ECE", "EEE", "MECH", "CIVIL", "IT", "AI", "ML", "AIDS", "CSBS", "AIML",
-  "MCA", "MBA", "BCA", "BBA", "BTECH", "MTECH", "PHD", "BSC", "MSC", "B.TECH", "M.TECH",
-  "VU", "APO"
-]);
-
-function toCleanTitleCase(str) {
-  if (!str) return "";
-  let clean = String(str).trim().replace(/\s+/g, " ");
-  clean = clean.replace(/\band\b/gi, "&").replace(/\s*&\s*/g, " & ");
-  
-  const words = clean.split(" ");
-  const formattedWords = words.map(word => {
-    const parenMatch = word.match(/^\((.*)\)$/);
-    if (parenMatch) {
-      const inner = parenMatch[1].toUpperCase();
-      return `(${inner})`;
-    }
-    const upper = word.toUpperCase();
-    if (KNOWN_ACRONYMS.has(upper)) return upper;
-    if (['&', 'of', 'in', 'the', 'for'].includes(word.toLowerCase())) {
-      return word.toLowerCase() === '&' ? '&' : word.toLowerCase();
-    }
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  });
-
-  let result = formattedWords.join(" ");
-  if (result.length > 0) {
-    result = result.charAt(0).toUpperCase() + result.slice(1);
-  }
-  return result;
-}
 
     // Department-wise stats (students & employees)
     const deptQueries = [
