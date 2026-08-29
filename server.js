@@ -684,6 +684,39 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
       };
     });
 
+const KNOWN_ACRONYMS = new Set([
+  "CSE", "DCSE", "ECE", "EEE", "MECH", "CIVIL", "IT", "AI", "ML", "AIDS", "CSBS", "AIML",
+  "MCA", "MBA", "BCA", "BBA", "BTECH", "MTECH", "PHD", "BSC", "MSC", "B.TECH", "M.TECH",
+  "VU", "APO"
+]);
+
+function toCleanTitleCase(str) {
+  if (!str) return "";
+  let clean = String(str).trim().replace(/\s+/g, " ");
+  clean = clean.replace(/\band\b/gi, "&").replace(/\s*&\s*/g, " & ");
+  
+  const words = clean.split(" ");
+  const formattedWords = words.map(word => {
+    const parenMatch = word.match(/^\((.*)\)$/);
+    if (parenMatch) {
+      const inner = parenMatch[1].toUpperCase();
+      return `(${inner})`;
+    }
+    const upper = word.toUpperCase();
+    if (KNOWN_ACRONYMS.has(upper)) return upper;
+    if (['&', 'of', 'in', 'the', 'for'].includes(word.toLowerCase())) {
+      return word.toLowerCase() === '&' ? '&' : word.toLowerCase();
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  let result = formattedWords.join(" ");
+  if (result.length > 0) {
+    result = result.charAt(0).toUpperCase() + result.slice(1);
+  }
+  return result;
+}
+
     // Department-wise stats (students & employees)
     const deptQueries = [
       `SELECT 
@@ -706,27 +739,46 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
       `);
     }
 
-    const deptStatsResult = await mainPool.query(`
+    const rawDeptResult = await mainPool.query(`
       SELECT 
         department,
         SUM(total)::int as total,
         SUM(registered)::int as registered
       FROM (${deptQueries.join("\n")}) as combined_depts
+      WHERE department IS NOT NULL AND TRIM(department) != ''
       GROUP BY department
-      ORDER BY total DESC, department ASC
     `);
 
-    const departmentStats = deptStatsResult.rows.map(r => {
-      const tot = parseInt(r.total, 10);
-      const reg = parseInt(r.registered, 10);
-      return {
-        department: r.department,
-        total: tot,
-        registered: reg,
-        unregistered: tot - reg,
-        rate: tot > 0 ? ((reg / tot) * 100).toFixed(1) : "0.0"
-      };
+    // Merge and deduplicate case-insensitively using normalized Title Case
+    const deptMap = new Map();
+    rawDeptResult.rows.forEach(r => {
+      const canonicalName = toCleanTitleCase(r.department);
+      if (!canonicalName || canonicalName.toLowerCase() === "general") return;
+      const key = canonicalName.toLowerCase();
+      const tot = parseInt(r.total, 10) || 0;
+      const reg = parseInt(r.registered, 10) || 0;
+
+      if (!deptMap.has(key)) {
+        deptMap.set(key, {
+          department: canonicalName,
+          total: 0,
+          registered: 0
+        });
+      }
+      const entry = deptMap.get(key);
+      entry.total += tot;
+      entry.registered += reg;
     });
+
+    const departmentStats = Array.from(deptMap.values())
+      .map(d => ({
+        department: d.department,
+        total: d.total,
+        registered: d.registered,
+        unregistered: d.total - d.registered,
+        rate: d.total > 0 ? ((d.registered / d.total) * 100).toFixed(1) : "0.0"
+      }))
+      .sort((a, b) => b.total - a.total || a.department.localeCompare(b.department));
     
     return res.json({
       ok: true,
@@ -748,7 +800,7 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
         id: row.id,
         identifier: row.id_number,
         name: row.name,
-        department: row.department,
+        department: toCleanTitleCase(row.department),
         oath_taken: row.oath_taken,
         registered_at: row.pledge_taken_at || row.registered_at
       }))
@@ -763,42 +815,73 @@ api.get("/admin/stats", requireAdminAuth, async (req, res) => {
   }
 });
 
-// GET /APO/admin/filter-options - Distinct years and departments for admin filters
+// GET /APO/admin/filter-options - Distinct years and departments with counts for admin filters
 api.get("/admin/filter-options", requireAdminAuth, async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 
     const yearsResult = await mainPool.query(`
-      SELECT DISTINCT cyear 
+      SELECT 
+        COALESCE(NULLIF(TRIM(cyear), ''), 'Unknown') as year,
+        COUNT(*)::int as count
       FROM students 
       WHERE cyear IS NOT NULL AND TRIM(cyear) != ''
-      ORDER BY cyear ASC
+      GROUP BY COALESCE(NULLIF(TRIM(cyear), ''), 'Unknown')
+      ORDER BY year ASC
     `);
-    const years = yearsResult.rows.map(r => String(r.cyear).trim());
+    const years = yearsResult.rows.map(r => ({
+      year: String(r.year).trim(),
+      count: parseInt(r.count, 10) || 0
+    }));
 
     const studentDeptsResult = await mainPool.query(`
-      SELECT DISTINCT branchname as department FROM students WHERE branchname IS NOT NULL AND TRIM(branchname) != ''
-      UNION
-      SELECT DISTINCT branch_shortname as department FROM students WHERE branch_shortname IS NOT NULL AND TRIM(branch_shortname) != ''
-      UNION
-      SELECT DISTINCT department as department FROM students WHERE department IS NOT NULL AND TRIM(department) != ''
+      SELECT 
+        COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), NULLIF(TRIM(department), '')) as department,
+        COUNT(*)::int as count
+      FROM students 
+      WHERE (branchname IS NOT NULL AND TRIM(branchname) != '')
+         OR (branch_shortname IS NOT NULL AND TRIM(branch_shortname) != '')
+         OR (department IS NOT NULL AND TRIM(department) != '')
+      GROUP BY COALESCE(NULLIF(TRIM(branchname), ''), NULLIF(TRIM(branch_shortname), ''), NULLIF(TRIM(department), ''))
     `);
     
-    let allDepts = new Set();
+    const deptCountMap = new Map();
     studentDeptsResult.rows.forEach(r => {
-      if (r.department && r.department.trim()) allDepts.add(r.department.trim());
+      if (!r.department) return;
+      const canonical = toCleanTitleCase(r.department);
+      if (!canonical || canonical.toLowerCase() === "general") return;
+      const key = canonical.toLowerCase();
+      const count = parseInt(r.count, 10) || 0;
+      deptCountMap.set(key, {
+        name: canonical,
+        count: (deptCountMap.get(key)?.count || 0) + count
+      });
     });
 
     if (await tableExists("employees")) {
       const empDeptsResult = await mainPool.query(`
-        SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND TRIM(department) != ''
+        SELECT 
+          department,
+          COUNT(*)::int as count
+        FROM employees 
+        WHERE department IS NOT NULL AND TRIM(department) != ''
+        GROUP BY department
       `);
       empDeptsResult.rows.forEach(r => {
-        if (r.department && r.department.trim()) allDepts.add(r.department.trim());
+        if (!r.department) return;
+        const canonical = toCleanTitleCase(r.department);
+        if (!canonical || canonical.toLowerCase() === "general") return;
+        const key = canonical.toLowerCase();
+        const count = parseInt(r.count, 10) || 0;
+        deptCountMap.set(key, {
+          name: canonical,
+          count: (deptCountMap.get(key)?.count || 0) + count
+        });
       });
     }
 
-    const departments = Array.from(allDepts).sort((a, b) => a.localeCompare(b));
+    const departments = Array.from(deptCountMap.values())
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
     return res.json({
       ok: true,
@@ -853,9 +936,10 @@ api.get("/admin/members", requireAdminAuth, async (req, res) => {
     }
 
     if (deptFilter && deptFilter !== "all") {
-      params.push(deptFilter);
-      studentConds.push(`(branchname = $${paramIndex} OR branch_shortname = $${paramIndex} OR department = $${paramIndex})`);
-      employeeConds.push(`department = $${paramIndex}`);
+      const cleanSearch = deptFilter.replace(/\s*&\s*/g, '%').replace(/\band\b/gi, '%').replace(/\s+/g, '%');
+      params.push(`%${cleanSearch}%`);
+      studentConds.push(`(branchname ILIKE $${paramIndex} OR branch_shortname ILIKE $${paramIndex} OR department ILIKE $${paramIndex})`);
+      employeeConds.push(`department ILIKE $${paramIndex}`);
       paramIndex++;
     }
 
@@ -910,17 +994,23 @@ api.get("/admin/members", requireAdminAuth, async (req, res) => {
     }
 
     if (queries.length === 0) {
-      return res.json({ ok: true, members: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+      return res.json({ ok: true, members: [], pagination: { page, limit, total: 0, totalPages: 0 }, filterCounts: { total: 0, completed: 0, pending: 0 } });
     }
 
     const combinedSql = queries.join("\n UNION ALL \n");
     
-    // Count total matching
+    // Count total matching, completed and pending counts
     const countResult = await mainPool.query(
-      `SELECT COUNT(*) as total FROM (${combinedSql}) AS subquery`,
+      `SELECT 
+         COUNT(*)::int as total,
+         COUNT(CASE WHEN oath_taken = true THEN 1 END)::int as completed,
+         COUNT(CASE WHEN oath_taken = false OR oath_taken IS NULL THEN 1 END)::int as pending
+       FROM (${combinedSql}) AS subquery`,
       params
     );
     const total = parseInt(countResult.rows[0].total, 10);
+    const completed = parseInt(countResult.rows[0].completed, 10);
+    const pending = parseInt(countResult.rows[0].pending, 10);
     const totalPages = Math.ceil(total / limit);
 
     // Fetch paginated data
@@ -937,12 +1027,20 @@ api.get("/admin/members", requireAdminAuth, async (req, res) => {
 
     return res.json({
       ok: true,
-      members: dataResult.rows,
+      members: dataResult.rows.map(m => ({
+        ...m,
+        department: toCleanTitleCase(m.department)
+      })),
       pagination: {
         page,
         limit,
         total,
         totalPages
+      },
+      filterCounts: {
+        total,
+        completed,
+        pending
       }
     });
   } catch (err) {

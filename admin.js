@@ -488,6 +488,41 @@ function mountDashboard() {
     populateFilterDropdowns();
 }
 
+const KNOWN_ACRONYMS = new Set([
+  "CSE", "DCSE", "ECE", "EEE", "MECH", "CIVIL", "IT", "AI", "ML", "AIDS", "CSBS", "AIML",
+  "MCA", "MBA", "BCA", "BBA", "BTECH", "MTECH", "PHD", "BSC", "MSC", "B.TECH", "M.TECH",
+  "VU", "APO"
+]);
+
+function toCleanTitleCase(str) {
+  if (!str) return "";
+  let clean = String(str).trim().replace(/\s+/g, " ");
+  clean = clean.replace(/\band\b/gi, "&").replace(/\s*&\s*/g, " & ");
+  
+  const words = clean.split(" ");
+  const formattedWords = words.map(word => {
+    const parenMatch = word.match(/^\((.*)\)$/);
+    if (parenMatch) {
+      const inner = parenMatch[1].toUpperCase();
+      return `(${inner})`;
+    }
+    const upper = word.toUpperCase();
+    if (KNOWN_ACRONYMS.has(upper)) return upper;
+    if (['&', 'of', 'in', 'the', 'for'].includes(word.toLowerCase())) {
+      return word.toLowerCase() === '&' ? '&' : word.toLowerCase();
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  let result = formattedWords.join(" ");
+  if (result.length > 0) {
+    result = result.charAt(0).toUpperCase() + result.slice(1);
+  }
+  return result;
+}
+
+let currentFilterCounts = null;
+
 /* ─── Filter Options Loading & Helpers ───────────────────────────────────────── */
 
 async function loadFilterOptions() {
@@ -513,44 +548,69 @@ function populateFilterDropdowns() {
     const deptSelect = document.getElementById('memberDeptFilter');
 
     // Extract years from cachedFilterOptions or stats
-    let years = (cachedFilterOptions.years || [])
-        .map(y => String(y).trim())
-        .filter(y => y.length > 0 && y !== 'Unknown');
-
-    if (years.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.yearStats)) {
-        years = cachedStatsData.yearStats
-            .map(y => String(y.year).trim())
-            .filter(y => y.length > 0 && y !== 'Unknown');
+    let yearList = [];
+    if (cachedFilterOptions.years && cachedFilterOptions.years.length > 0) {
+        yearList = cachedFilterOptions.years.map(y => {
+            if (typeof y === 'object' && y !== null) {
+                return { year: String(y.year).trim(), count: y.count || 0 };
+            }
+            return { year: String(y).trim(), count: 0 };
+        });
+    } else if (cachedStatsData && Array.isArray(cachedStatsData.yearStats)) {
+        yearList = cachedStatsData.yearStats.map(y => ({
+            year: String(y.year).trim(),
+            count: y.total || 0
+        }));
     }
 
-    // Deduplicate & sort years
-    years = Array.from(new Set(years)).sort((a, b) => {
-        const numA = parseInt(a, 10);
-        const numB = parseInt(b, 10);
+    yearList = yearList.filter(y => y.year && y.year.length > 0 && y.year !== 'Unknown');
+    yearList.sort((a, b) => {
+        const numA = parseInt(a.year, 10);
+        const numB = parseInt(b.year, 10);
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        return a.localeCompare(b);
+        return a.year.localeCompare(b.year);
     });
 
     // Extract departments from cachedFilterOptions or stats
-    let depts = (cachedFilterOptions.departments || [])
-        .map(d => String(d).trim())
-        .filter(d => d.length > 0 && d !== 'General');
-
-    if (depts.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.departmentStats)) {
-        depts = cachedStatsData.departmentStats
-            .map(d => String(d.department).trim())
-            .filter(d => d.length > 0 && d !== 'General');
+    let deptList = [];
+    if (cachedFilterOptions.departments && cachedFilterOptions.departments.length > 0) {
+        deptList = cachedFilterOptions.departments.map(d => {
+            if (typeof d === 'object' && d !== null) {
+                return { name: toCleanTitleCase(d.name || d.department), count: d.count || d.total || 0 };
+            }
+            return { name: toCleanTitleCase(d), count: 0 };
+        });
+    } else if (cachedStatsData && Array.isArray(cachedStatsData.departmentStats)) {
+        deptList = cachedStatsData.departmentStats.map(d => ({
+            name: toCleanTitleCase(d.department),
+            count: d.total || 0
+        }));
     }
 
-    // Deduplicate & sort departments alphabetically
-    depts = Array.from(new Set(depts)).sort((a, b) => a.localeCompare(b));
+    // Deduplicate by lowercase name
+    const deptMap = new Map();
+    deptList.forEach(d => {
+        if (!d.name || d.name.toLowerCase() === 'general') return;
+        const key = d.name.toLowerCase();
+        if (!deptMap.has(key)) {
+            deptMap.set(key, { name: d.name, count: d.count });
+        } else {
+            deptMap.get(key).count += d.count;
+        }
+    });
+
+    const uniqueDepts = Array.from(deptMap.values()).sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.name.localeCompare(b.name);
+    });
 
     if (yearSelect) {
         const prevYear = yearSelect.value || currentFilterYear || 'all';
         let html = '<option value="all">🎓 All Academic Years</option>';
-        years.forEach(y => {
-            const label = formatYearLabel(y);
-            html += `<option value="${escapeHtml(y)}" ${prevYear === y ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        yearList.forEach(y => {
+            const countLabel = y.count > 0 ? ` (${formatNumber(y.count)})` : '';
+            const label = formatYearLabel(y.year) + countLabel;
+            html += `<option value="${escapeHtml(y.year)}" ${prevYear === y.year ? 'selected' : ''}>${escapeHtml(label)}</option>`;
         });
         yearSelect.innerHTML = html;
         if (prevYear && prevYear !== 'all') yearSelect.value = prevYear;
@@ -559,8 +619,10 @@ function populateFilterDropdowns() {
     if (deptSelect) {
         const prevDept = deptSelect.value || currentFilterDept || 'all';
         let html = '<option value="all">🏢 All Departments / Branches</option>';
-        depts.forEach(d => {
-            html += `<option value="${escapeHtml(d)}" ${prevDept === d ? 'selected' : ''}>${escapeHtml(d)}</option>`;
+        uniqueDepts.forEach(d => {
+            const countLabel = d.count > 0 ? ` (${formatNumber(d.count)})` : '';
+            const label = d.name + countLabel;
+            html += `<option value="${escapeHtml(d.name)}" ${prevDept.toLowerCase() === d.name.toLowerCase() ? 'selected' : ''}>${escapeHtml(label)}</option>`;
         });
         deptSelect.innerHTML = html;
         if (prevDept && prevDept !== 'all') deptSelect.value = prevDept;
@@ -670,12 +732,25 @@ function updateActiveFiltersSummary() {
         activeChips.push(`<span class="filter-chip chip-highlight">🏢 ${escapeHtml(dept)} <button onclick="document.getElementById('memberDeptFilter').value='all';onFilterChange();">✕</button></span>`);
     }
 
-    if (activeChips.length > 0) {
+    let countsBadgeHtml = '';
+    if (currentFilterCounts && typeof currentFilterCounts.total === 'number') {
+        countsBadgeHtml = `
+            <div class="active-count-indicator">
+                📊 <strong>${formatNumber(currentFilterCounts.total)}</strong> Found
+                <span class="count-pill text-success">✅ ${formatNumber(currentFilterCounts.completed)}</span>
+                <span class="count-pill text-warning">⏳ ${formatNumber(currentFilterCounts.pending)}</span>
+            </div>
+        `;
+    }
+
+    if (activeChips.length > 0 || countsBadgeHtml) {
         bar.style.display = 'flex';
         bar.innerHTML = `
-            <span class="active-filters-label">Active Filters:</span>
-            <div class="active-chips-list">${activeChips.join('')}</div>
-            <button class="clear-all-chip-btn" onclick="resetAllFilters()">Clear All</button>
+            <div class="active-filters-left">
+                ${countsBadgeHtml}
+                <div class="active-chips-list">${activeChips.join('')}</div>
+            </div>
+            ${activeChips.length > 0 ? '<button class="clear-all-chip-btn" onclick="resetAllFilters()">Clear All</button>' : ''}
         `;
     } else {
         bar.style.display = 'none';
@@ -975,6 +1050,13 @@ async function loadMembers(page = 1) {
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Failed to fetch members');
 
+        currentFilterCounts = data.filterCounts || {
+            total: data.pagination?.total || 0,
+            completed: 0,
+            pending: 0
+        };
+
+        updateActiveFiltersSummary();
         renderMembersTable(data.members || []);
         renderPagination(data.pagination);
 
@@ -1014,7 +1096,7 @@ function renderMembersTable(members) {
                 </td>
                 <td>
                     <div class="dept-cell-wrap">
-                        <span class="dept-title">${escapeHtml(m.department || 'N/A')}</span>
+                        <span class="dept-title">${escapeHtml(toCleanTitleCase(m.department || 'N/A'))}</span>
                         <div class="dept-badges-row">
                             ${m.branch_shortname ? `<span class="branch-pill">${escapeHtml(m.branch_shortname)}</span>` : ''}
                             ${m.cyear ? `<span class="year-pill">Year ${escapeHtml(m.cyear)}${m.sectioncode ? ` • Sec ${escapeHtml(m.sectioncode)}` : ''}</span>` : ''}
@@ -1077,7 +1159,14 @@ function renderPagination(pagination) {
 
     const start = (page - 1) * limit + 1;
     const end = Math.min(page * limit, total);
-    if (info) info.textContent = `Showing ${start}-${end} of ${total.toLocaleString()} members`;
+    
+    if (info) {
+        if (currentFilterCounts && typeof currentFilterCounts.completed === 'number') {
+            info.innerHTML = `Showing ${start}-${end} of <strong>${formatNumber(total)}</strong> members (<span style="color:#059669;font-weight:600;">${formatNumber(currentFilterCounts.completed)} Completed</span> • <span style="color:#d97706;font-weight:600;">${formatNumber(currentFilterCounts.pending)} Pending</span>)`;
+        } else {
+            info.textContent = `Showing ${start}-${end} of ${formatNumber(total)} members`;
+        }
+    }
     if (indicator) indicator.textContent = `Page ${page} of ${totalPages || 1}`;
 
     if (prevBtn) prevBtn.disabled = page <= 1;
