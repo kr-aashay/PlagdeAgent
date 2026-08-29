@@ -512,20 +512,32 @@ function populateFilterDropdowns() {
     const yearSelect = document.getElementById('memberYearFilter');
     const deptSelect = document.getElementById('memberDeptFilter');
 
-    if (yearSelect && cachedFilterOptions.years.length > 0) {
+    // Extract years from cachedFilterOptions or stats
+    let years = cachedFilterOptions.years || [];
+    if (years.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.yearStats)) {
+        years = cachedStatsData.yearStats.map(y => y.year).filter(Boolean);
+    }
+
+    // Extract departments from cachedFilterOptions or stats
+    let depts = cachedFilterOptions.departments || [];
+    if (depts.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.departmentStats)) {
+        depts = cachedStatsData.departmentStats.map(d => d.department).filter(Boolean);
+    }
+
+    if (yearSelect && years.length > 0) {
         const prevYear = yearSelect.value || currentFilterYear;
         let html = '<option value="all">🎓 All Years</option>';
-        cachedFilterOptions.years.forEach(y => {
+        years.forEach(y => {
             const label = formatYearLabel(y);
             html += `<option value="${escapeHtml(y)}" ${prevYear === y ? 'selected' : ''}>${escapeHtml(label)}</option>`;
         });
         yearSelect.innerHTML = html;
     }
 
-    if (deptSelect && cachedFilterOptions.departments.length > 0) {
+    if (deptSelect && depts.length > 0) {
         const prevDept = deptSelect.value || currentFilterDept;
         let html = '<option value="all">🏢 All Departments / Branches</option>';
-        cachedFilterOptions.departments.forEach(d => {
+        depts.forEach(d => {
             html += `<option value="${escapeHtml(d)}" ${prevDept === d ? 'selected' : ''}>${escapeHtml(d)}</option>`;
         });
         deptSelect.innerHTML = html;
@@ -702,6 +714,9 @@ function updateDashboardUI(data) {
 
         // Recent registrations
         updateRecentRegistrations(data.recentRegistrations || []);
+
+        // Populate Year and Department filters if needed
+        populateFilterDropdowns();
 
         clearErrorState();
 
