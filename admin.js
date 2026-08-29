@@ -513,34 +513,57 @@ function populateFilterDropdowns() {
     const deptSelect = document.getElementById('memberDeptFilter');
 
     // Extract years from cachedFilterOptions or stats
-    let years = cachedFilterOptions.years || [];
+    let years = (cachedFilterOptions.years || [])
+        .map(y => String(y).trim())
+        .filter(y => y.length > 0 && y !== 'Unknown');
+
     if (years.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.yearStats)) {
-        years = cachedStatsData.yearStats.map(y => y.year).filter(Boolean);
+        years = cachedStatsData.yearStats
+            .map(y => String(y.year).trim())
+            .filter(y => y.length > 0 && y !== 'Unknown');
     }
+
+    // Deduplicate & sort years
+    years = Array.from(new Set(years)).sort((a, b) => {
+        const numA = parseInt(a, 10);
+        const numB = parseInt(b, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b);
+    });
 
     // Extract departments from cachedFilterOptions or stats
-    let depts = cachedFilterOptions.departments || [];
+    let depts = (cachedFilterOptions.departments || [])
+        .map(d => String(d).trim())
+        .filter(d => d.length > 0 && d !== 'General');
+
     if (depts.length === 0 && cachedStatsData && Array.isArray(cachedStatsData.departmentStats)) {
-        depts = cachedStatsData.departmentStats.map(d => d.department).filter(Boolean);
+        depts = cachedStatsData.departmentStats
+            .map(d => String(d.department).trim())
+            .filter(d => d.length > 0 && d !== 'General');
     }
 
-    if (yearSelect && years.length > 0) {
-        const prevYear = yearSelect.value || currentFilterYear;
-        let html = '<option value="all">🎓 All Years</option>';
+    // Deduplicate & sort departments alphabetically
+    depts = Array.from(new Set(depts)).sort((a, b) => a.localeCompare(b));
+
+    if (yearSelect) {
+        const prevYear = yearSelect.value || currentFilterYear || 'all';
+        let html = '<option value="all">🎓 All Academic Years</option>';
         years.forEach(y => {
             const label = formatYearLabel(y);
             html += `<option value="${escapeHtml(y)}" ${prevYear === y ? 'selected' : ''}>${escapeHtml(label)}</option>`;
         });
         yearSelect.innerHTML = html;
+        if (prevYear && prevYear !== 'all') yearSelect.value = prevYear;
     }
 
-    if (deptSelect && depts.length > 0) {
-        const prevDept = deptSelect.value || currentFilterDept;
+    if (deptSelect) {
+        const prevDept = deptSelect.value || currentFilterDept || 'all';
         let html = '<option value="all">🏢 All Departments / Branches</option>';
         depts.forEach(d => {
             html += `<option value="${escapeHtml(d)}" ${prevDept === d ? 'selected' : ''}>${escapeHtml(d)}</option>`;
         });
         deptSelect.innerHTML = html;
+        if (prevDept && prevDept !== 'all') deptSelect.value = prevDept;
     }
 }
 
