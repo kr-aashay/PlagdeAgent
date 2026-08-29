@@ -742,3 +742,5 @@ html, body {
 
 /* ─── Hidden legacy panel refs (app.js still queries these) ── */
 #badgePlaceholder, #badgeResult, #badgePanel { display: none !important; }
+
+#downloadBadgeBtn, #downloadCertBtn { display: none !important; }
